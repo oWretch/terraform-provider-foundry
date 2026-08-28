@@ -1,0 +1,32 @@
+# Terraform working files
+.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfrc
+.terraformrc
+terraform.rc
+
+# Go build and test output
+/terraform-provider-foundry
+/dist/
+coverage.out
+*.prof
+*.test
+
+# Local development files
+/.tmp/
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+.zed/
