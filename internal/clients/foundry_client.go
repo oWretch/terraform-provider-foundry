@@ -204,10 +204,13 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Re
 	if err != nil {
 		return nil, fmt.Errorf("build request URL: %w", err)
 	}
-	query := requestURL.Query()
-	if query.Get("api-version") == "" {
-		query.Set("api-version", c.apiVersion)
-		requestURL.RawQuery = query.Encode()
+	// OpenAI-compatible routes are versioned in the path and reject api-version.
+	if !isOpenAIRoute(reference.Path) {
+		query := requestURL.Query()
+		if query.Get("api-version") == "" {
+			query.Set("api-version", c.apiVersion)
+			requestURL.RawQuery = query.Encode()
+		}
 	}
 
 	request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), body)
@@ -224,6 +227,10 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Re
 	request.Header.Set("x-ms-client-request-id", hex.EncodeToString(requestID))
 
 	return request, nil
+}
+
+func isOpenAIRoute(path string) bool {
+	return strings.HasPrefix(strings.TrimLeft(path, "/"), "openai/")
 }
 
 func (c *Client) Do(request *http.Request) (*http.Response, error) {

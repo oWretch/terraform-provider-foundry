@@ -140,3 +140,31 @@ type roundTripperFunc func(*http.Request) (*http.Response, error)
 func (f roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f(request)
 }
+
+func TestOpenAIRoutesOmitAPIVersion(t *testing.T) {
+	t.Parallel()
+
+	client, err := New(Config{
+		AccountName: "account",
+		ProjectName: "project",
+		Environment: EnvironmentPublic,
+		Auth:        Authentication{Method: AuthenticationAPIKey, APIKey: "secret"},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	tests := map[string]string{
+		"openai/v1/files": "https://account.services.ai.azure.com/api/projects/project/openai/v1/files",
+		"agents":          "https://account.services.ai.azure.com/api/projects/project/agents?api-version=v1",
+	}
+	for path, want := range tests {
+		request, err := client.NewRequest(context.Background(), http.MethodGet, path, nil)
+		if err != nil {
+			t.Fatalf("NewRequest(%q) error = %v", path, err)
+		}
+		if request.URL.String() != want {
+			t.Errorf("NewRequest(%q) URL = %q, want %q", path, request.URL.String(), want)
+		}
+	}
+}
