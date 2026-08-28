@@ -58,19 +58,45 @@ type Authentication struct {
 }
 
 type Config struct {
-	AccountName string
-	ProjectName string
-	Environment Environment
-	UserAgent   string
-	Transport   http.RoundTripper
-	Auth        Authentication
+	AccountName     string
+	ProjectName     string
+	Environment     Environment
+	UserAgent       string
+	Transport       http.RoundTripper
+	Auth            Authentication
+	PreviewFeatures []string
 }
 
 type Client struct {
-	endpoint   *url.URL
-	apiVersion string
-	userAgent  string
-	httpClient *http.Client
+	endpoint        *url.URL
+	apiVersion      string
+	userAgent       string
+	httpClient      *http.Client
+	previewFeatures map[string]bool
+}
+
+// PreviewEnabled reports whether the named preview feature was opted into via
+// the provider's enable_preview attribute. Feature names are the snake_case
+// values users write in enable_preview (e.g. "evaluations", "memory_stores"),
+// not the Foundry-Features header values they map to.
+func (c *Client) PreviewEnabled(feature string) bool {
+	return c.previewFeatures[feature]
+}
+
+type previewFeatureKey struct{}
+
+// WithPreviewFeature returns a context that makes subsequent requests send the
+// Foundry-Features preview header. feature is the enable_preview name
+// (e.g. "memory_stores") and header is the service's feature token
+// (e.g. "MemoryStores"). It errors if the feature was not enabled via
+// enable_preview, so a resource cannot accidentally call a preview endpoint
+// without opt-in even if ValidateConfig was skipped (e.g. an unconfigured
+// `terraform validate`).
+func (c *Client) WithPreviewFeature(ctx context.Context, feature, header string) (context.Context, error) {
+	if !c.previewFeatures[feature] {
+		return ctx, fmt.Errorf("preview feature %q is not enabled; add it to the provider's enable_preview attribute", feature)
+	}
+	return context.WithValue(ctx, previewFeatureKey{}, header), nil
 }
 
 type ResponseError struct {
@@ -138,6 +164,11 @@ func New(config Config) (*Client, error) {
 		userAgent = defaultUserAgent
 	}
 
+	previewFeatures := make(map[string]bool, len(config.PreviewFeatures))
+	for _, feature := range config.PreviewFeatures {
+		previewFeatures[feature] = true
+	}
+
 	return &Client{
 		endpoint:   endpoint,
 		apiVersion: defaultAPIVersion,
@@ -148,6 +179,7 @@ func New(config Config) (*Client, error) {
 				maxRetries: 3,
 			},
 		},
+		previewFeatures: previewFeatures,
 	}, nil
 }
 
@@ -225,6 +257,10 @@ func (c *Client) NewRequest(ctx context.Context, method, path string, body io.Re
 		return nil, fmt.Errorf("generate client request ID: %w", err)
 	}
 	request.Header.Set("x-ms-client-request-id", hex.EncodeToString(requestID))
+
+	if feature, ok := ctx.Value(previewFeatureKey{}).(string); ok {
+		request.Header.Set("Foundry-Features", feature+"=V1Preview")
+	}
 
 	return request, nil
 }

@@ -168,3 +168,49 @@ func TestOpenAIRoutesOmitAPIVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewFeatureHeader(t *testing.T) {
+	t.Parallel()
+
+	client, err := New(Config{
+		AccountName:     "account",
+		ProjectName:     "project",
+		Environment:     EnvironmentPublic,
+		Auth:            Authentication{Method: AuthenticationAPIKey, APIKey: "secret"},
+		PreviewFeatures: []string{"evaluations"},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	if !client.PreviewEnabled("evaluations") {
+		t.Fatal("PreviewEnabled(evaluations) = false, want true")
+	}
+	if client.PreviewEnabled("memory_stores") {
+		t.Fatal("PreviewEnabled(memory_stores) = true, want false")
+	}
+
+	if _, err := client.WithPreviewFeature(context.Background(), "memory_stores", "MemoryStores"); err == nil {
+		t.Fatal("WithPreviewFeature(memory_stores) error = nil, want error for unopted-in feature")
+	}
+
+	ctx, err := client.WithPreviewFeature(context.Background(), "evaluations", "Evaluations")
+	if err != nil {
+		t.Fatalf("WithPreviewFeature(evaluations) error = %v", err)
+	}
+	request, err := client.NewRequest(ctx, http.MethodGet, "evaluationrules/id", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	if got := request.Header.Get("Foundry-Features"); got != "Evaluations=V1Preview" {
+		t.Errorf("Foundry-Features header = %q, want %q", got, "Evaluations=V1Preview")
+	}
+
+	plainRequest, err := client.NewRequest(context.Background(), http.MethodGet, "evaluationrules/id", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	if got := plainRequest.Header.Get("Foundry-Features"); got != "" {
+		t.Errorf("Foundry-Features header = %q, want empty without preview context", got)
+	}
+}

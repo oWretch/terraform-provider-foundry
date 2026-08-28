@@ -24,6 +24,7 @@ type providerModel struct {
 	OIDCTokenFilePath         types.String `tfsdk:"oidc_token_file_path"`
 	UseMSI                    types.Bool   `tfsdk:"use_msi"`
 	UseCLI                    types.Bool   `tfsdk:"use_cli"`
+	EnablePreview             types.Set    `tfsdk:"enable_preview"`
 }
 
 type environmentLookup func(string) (string, bool)
@@ -71,6 +72,20 @@ func resolveConfig(model providerModel, lookup environmentLookup) (clients.Confi
 		environment = string(clients.EnvironmentPublic)
 	}
 
+	if model.EnablePreview.IsUnknown() {
+		return clients.Config{}, fmt.Errorf("%q must be known before the provider can be configured", "enable_preview")
+	}
+	var previewFeatures []string
+	if !model.EnablePreview.IsNull() {
+		for _, element := range model.EnablePreview.Elements() {
+			value, ok := element.(types.String)
+			if !ok {
+				continue
+			}
+			previewFeatures = append(previewFeatures, value.ValueString())
+		}
+	}
+
 	apiKey := stringValue(model.APIKey, "FOUNDRY_API_KEY", lookup)
 	tenantID := strings.TrimSpace(stringValue(model.TenantID, "ARM_TENANT_ID", lookup))
 	clientID := strings.TrimSpace(stringValue(model.ClientID, "ARM_CLIENT_ID", lookup))
@@ -106,6 +121,7 @@ func resolveConfig(model providerModel, lookup environmentLookup) (clients.Confi
 				Method: clients.AuthenticationAPIKey,
 				APIKey: apiKey,
 			},
+			PreviewFeatures: previewFeatures,
 		}, nil
 	}
 
@@ -180,10 +196,11 @@ func resolveConfig(model providerModel, lookup environmentLookup) (clients.Confi
 	}
 
 	return clients.Config{
-		AccountName: accountName,
-		ProjectName: projectName,
-		Environment: clients.Environment(environment),
-		Auth:        auth,
+		AccountName:     accountName,
+		ProjectName:     projectName,
+		Environment:     clients.Environment(environment),
+		Auth:            auth,
+		PreviewFeatures: previewFeatures,
 	}, nil
 }
 

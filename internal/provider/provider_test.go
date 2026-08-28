@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -213,5 +214,34 @@ func TestResolveConfig(t *testing.T) {
 				t.Errorf("environment = %q, want %q", config.Environment, test.wantCloud)
 			}
 		})
+	}
+}
+
+func TestResolveConfigEnablePreview(t *testing.T) {
+	t.Parallel()
+
+	model := providerModel{
+		AccountName: types.StringValue("example"),
+		ProjectName: types.StringValue("demo"),
+		APIKey:      types.StringValue("key"),
+		EnablePreview: types.SetValueMust(types.StringType, []attr.Value{
+			types.StringValue("evaluations"),
+			types.StringValue("memory_stores"),
+		}),
+	}
+
+	config, err := resolveConfig(model, func(string) (string, bool) { return "", false })
+	if err != nil {
+		t.Fatalf("resolveConfig() error = %v", err)
+	}
+
+	want := map[string]bool{"evaluations": true, "memory_stores": true}
+	if len(config.PreviewFeatures) != len(want) {
+		t.Fatalf("PreviewFeatures = %v, want keys %v", config.PreviewFeatures, want)
+	}
+	for _, feature := range config.PreviewFeatures {
+		if !want[feature] {
+			t.Errorf("unexpected preview feature %q", feature)
+		}
 	}
 }
