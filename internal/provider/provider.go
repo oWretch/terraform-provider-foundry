@@ -120,9 +120,14 @@ func (p *foundryProvider) Configure(ctx context.Context, req provider.ConfigureR
 }
 
 func (p *foundryProvider) Resources(context.Context) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{
+		NewPromptAgentResource,
+		NewHostedAgentResource,
+	}
 }
 
 func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return nil
+	return []func() datasource.DataSource{
+		NewDeploymentsDataSource,
+	}
 }
