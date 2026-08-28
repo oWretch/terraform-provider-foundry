@@ -13,6 +13,9 @@ This file records user-visible changes to the provider.
 - Local development, CI, documentation, and draft release workflows.
 - `foundry_prompt_agent` resource for agents backed by a model deployment and instructions.
 - `foundry_hosted_agent` resource for agents backed by a container image.
+- `foundry_file` resource for uploading files used by other Foundry resources.
+- `foundry_vector_store` resource for indexing attached files for retrieval.
+- `foundry_vector_store_file` resource for attaching a file to a vector store.
 - `foundry_deployments` data source listing the model deployments available to the project.
 
 ### Fixed

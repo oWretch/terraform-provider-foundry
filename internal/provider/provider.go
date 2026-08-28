@@ -123,6 +123,9 @@ func (p *foundryProvider) Resources(context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewPromptAgentResource,
 		NewHostedAgentResource,
+		NewFileResource,
+		NewVectorStoreResource,
+		NewVectorStoreFileResource,
 	}
 }
 
