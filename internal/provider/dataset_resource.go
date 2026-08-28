@@ -48,6 +48,9 @@ type datasetModel struct {
 	LastModifiedAt types.String `tfsdk:"last_modified_at"`
 }
 
+// ConnectionName is required by the service but is undocumented in the public
+// API reference; omitting it returns an opaque "Invalid request when
+// registering the data asset..." error with no field-level detail.
 type datasetRequest struct {
 	Type           string            `json:"type"`
 	ConnectionName string            `json:"connectionName"`

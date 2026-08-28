@@ -39,6 +39,8 @@ type indexModel struct {
 	ID             types.String `tfsdk:"id"`
 }
 
+// ConnectionName is required by the service but undocumented in the public
+// API reference, same gotcha as datasetRequest.ConnectionName.
 type indexRequest struct {
 	Type           string `json:"type"`
 	ConnectionName string `json:"connectionName"`
