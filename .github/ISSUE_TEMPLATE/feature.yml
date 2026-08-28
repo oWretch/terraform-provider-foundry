@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a provider capability
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the Foundry workflow that Terraform cannot manage.
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: Current Foundry API
+      description: Link to the current API or SDK surface when known.
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Proposed Terraform configuration
+      render: terraform
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
