@@ -1,6 +1,21 @@
 # Terraform Provider for Microsoft Foundry
 
-This repository contains an early Terraform provider for the current Microsoft Foundry Agent Service. It currently implements provider configuration and authentication only. Resources and data sources will be added once their API contracts are chosen.
+This repository contains a Terraform provider for the current Microsoft Foundry Agent Service.
+
+## Resources
+
+- `foundry_prompt_agent` — an agent backed by a model deployment and instructions.
+- `foundry_hosted_agent` — an agent backed by a container image you supply.
+- `foundry_file` — an uploaded file used by other Foundry resources.
+- `foundry_vector_store` — a vector store that indexes attached files for retrieval.
+- `foundry_vector_store_file` — a file attached to a vector store.
+- `foundry_dataset` — a dataset version registered from a blob file or folder.
+- `foundry_index` — an Azure AI Search-backed index version.
+
+## Data Sources
+
+- `foundry_deployments` — model deployments available to the configured project.
+- `foundry_connections` — connections configured on the account and project, for referencing an existing connection by name.
 
 The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.24 or later.
 

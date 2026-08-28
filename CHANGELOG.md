@@ -19,6 +19,7 @@ This file records user-visible changes to the provider.
 - `foundry_dataset` resource for registering a blob file or folder as a dataset version.
 - `foundry_index` resource for managing an Azure AI Search-backed index version.
 - `foundry_deployments` data source listing the model deployments available to the project.
+- `foundry_connections` data source listing the connections configured on the account and project, for referencing an existing connection by name.
 
 ### Fixed
 

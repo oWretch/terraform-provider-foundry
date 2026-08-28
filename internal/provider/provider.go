@@ -134,5 +134,6 @@ func (p *foundryProvider) Resources(context.Context) []func() resource.Resource 
 func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewDeploymentsDataSource,
+		NewConnectionsDataSource,
 	}
 }
