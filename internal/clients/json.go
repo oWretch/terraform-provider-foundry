@@ -13,6 +13,12 @@ import (
 // JSON sends body as JSON to path and decodes the response into out.
 // Either body or out may be nil. Use IsNotFound to detect a deleted resource.
 func (c *Client) JSON(ctx context.Context, method, path string, body, out any) error {
+	return c.JSONWithContentType(ctx, method, path, "application/json", body, out)
+}
+
+// JSONWithContentType behaves like JSON but sets an explicit request Content-Type.
+// Native routes such as datasets and indexes require application/merge-patch+json.
+func (c *Client) JSONWithContentType(ctx context.Context, method, path, contentType string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -27,7 +33,7 @@ func (c *Client) JSON(ctx context.Context, method, path string, body, out any) e
 		return err
 	}
 	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Content-Type", contentType)
 	}
 
 	response, err := c.Do(request)

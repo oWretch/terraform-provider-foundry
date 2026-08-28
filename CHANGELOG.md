@@ -16,6 +16,8 @@ This file records user-visible changes to the provider.
 - `foundry_file` resource for uploading files used by other Foundry resources.
 - `foundry_vector_store` resource for indexing attached files for retrieval.
 - `foundry_vector_store_file` resource for attaching a file to a vector store.
+- `foundry_dataset` resource for registering a blob file or folder as a dataset version.
+- `foundry_index` resource for managing an Azure AI Search-backed index version.
 - `foundry_deployments` data source listing the model deployments available to the project.
 
 ### Fixed

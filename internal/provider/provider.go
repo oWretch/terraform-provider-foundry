@@ -126,6 +126,8 @@ func (p *foundryProvider) Resources(context.Context) []func() resource.Resource 
 		NewFileResource,
 		NewVectorStoreResource,
 		NewVectorStoreFileResource,
+		NewDatasetResource,
+		NewIndexResource,
 	}
 }
 
