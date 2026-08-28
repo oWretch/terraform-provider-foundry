@@ -45,10 +45,16 @@ resource "foundry_hosted_agent" "checkout" {
 ### Optional
 
 - `description` (String) Description of the agent version.
+- `draft` (Boolean) ~> **Preview:** requires `enable_preview` to include `"draft_agents"`. Preview features may change in any provider release without following semantic versioning.
+
+When `true`, publishing a new definition creates a mutable draft version instead of an immutable numbered version. Defaults to `false`.
 - `environment_variables` (Map of String) Environment variables passed to the container. Do not place secrets here, because Terraform stores them in state.
 
 ### Read-Only
 
+- `agent_endpoint` (Attributes) ~> **Preview:** requires `enable_preview` to include `"agent_endpoints"`. Preview features may change in any provider release without following semantic versioning.
+
+The agent's built-in endpoint, including how traffic is routed across published versions. Read-only; the service manages the remaining endpoint sub-fields (protocol configuration, authorization schemes) outside this provider. (see [below for nested schema](#nestedatt--agent_endpoint))
 - `agent_guid` (String) Service-assigned unique identifier for the agent.
 - `client_id` (String) Client ID of the agent instance identity.
 - `id` (String) Identifier of the current agent version, in `name:version` form.
@@ -62,6 +68,24 @@ Required:
 
 - `protocol` (String) Protocol name, such as `responses`.
 - `version` (String) Protocol version implemented by the container.
+
+
+<a id="nestedatt--agent_endpoint"></a>
+### Nested Schema for `agent_endpoint`
+
+Read-Only:
+
+- `protocols` (List of String) Protocols the endpoint serves, such as `responses`.
+- `version_selection_rules` (Attributes List) Traffic routing rules applied to agent versions. (see [below for nested schema](#nestedatt--agent_endpoint--version_selection_rules))
+
+<a id="nestedatt--agent_endpoint--version_selection_rules"></a>
+### Nested Schema for `agent_endpoint.version_selection_rules`
+
+Read-Only:
+
+- `agent_version` (String) Agent version the rule applies to, or `@latest`.
+- `traffic_percentage` (Number) Percentage of traffic routed to this version.
+- `type` (String) Routing rule type, such as `FixedRatio`.
 
 ## Import
 

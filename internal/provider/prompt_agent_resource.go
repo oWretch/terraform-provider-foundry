@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -12,9 +13,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &promptAgentResource{}
-	_ resource.ResourceWithConfigure   = &promptAgentResource{}
-	_ resource.ResourceWithImportState = &promptAgentResource{}
+	_ resource.Resource                   = &promptAgentResource{}
+	_ resource.ResourceWithConfigure      = &promptAgentResource{}
+	_ resource.ResourceWithImportState    = &promptAgentResource{}
+	_ resource.ResourceWithValidateConfig = &promptAgentResource{}
 )
 
 func NewPromptAgentResource() resource.Resource {
@@ -45,8 +47,9 @@ func (m promptAgentModel) definition() promptAgentDefinition {
 	}
 }
 
-func (m *promptAgentModel) apply(version agentVersion, definition promptAgentDefinition) {
+func (m *promptAgentModel) apply(ctx context.Context, version agentVersion, endpoint *agentEndpoint, definition promptAgentDefinition, diagnostics *diag.Diagnostics) {
 	m.applyVersion(version)
+	m.applyEndpoint(ctx, endpoint, diagnostics)
 	m.Model = types.StringValue(definition.Model)
 	m.Instructions = optionalString(definition.Instructions)
 }
@@ -76,6 +79,15 @@ func (r *promptAgentResource) Configure(_ context.Context, req resource.Configur
 	r.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
+func (r *promptAgentResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config promptAgentModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateDraftPreview(r.client, config.Draft, &resp.Diagnostics)
+}
+
 func (r *promptAgentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan promptAgentModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -83,7 +95,7 @@ func (r *promptAgentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	version, err := createAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition())
+	version, endpoint, err := createAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create prompt agent", err.Error())
 		return
@@ -93,7 +105,7 @@ func (r *promptAgentResource) Create(ctx context.Context, req resource.CreateReq
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	plan.apply(version, definition)
+	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -104,7 +116,7 @@ func (r *promptAgentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	version, err := readAgent(ctx, r.client, state.Name.ValueString())
+	version, endpoint, err := readAgent(ctx, r.client, state.Name.ValueString())
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -118,7 +130,7 @@ func (r *promptAgentResource) Read(ctx context.Context, req resource.ReadRequest
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	state.apply(version, definition)
+	state.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -129,7 +141,7 @@ func (r *promptAgentResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition())
+	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update prompt agent", err.Error())
 		return
@@ -139,7 +151,14 @@ func (r *promptAgentResource) Update(ctx context.Context, req resource.UpdateReq
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	plan.apply(version, definition)
+	// updateAgent does not return endpoint metadata, so re-read it to keep the
+	// computed agent_endpoint attribute accurate after publishing a new version.
+	_, endpoint, err := readAgent(ctx, r.client, plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read prompt agent endpoint", err.Error())
+		return
+	}
+	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

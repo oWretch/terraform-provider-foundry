@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
@@ -91,6 +92,11 @@ func (p *foundryProvider) Schema(_ context.Context, _ provider.SchemaRequest, re
 				Optional:            true,
 				MarkdownDescription: "Use the signed-in Azure CLI account. Defaults to `true` when no other authentication mode is configured. Can also be set with `ARM_USE_CLI`.",
 			},
+			"enable_preview": schema.SetAttribute{
+				Optional:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Opts in to preview Foundry resources and data sources, individually by name (for example `[\"evaluations\", \"memory_stores\"]`). Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning. See the provider documentation for the list of preview feature names and the resources each one gates.",
+			},
 		},
 	}
 }
@@ -123,11 +129,21 @@ func (p *foundryProvider) Resources(context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewPromptAgentResource,
 		NewHostedAgentResource,
+		NewExternalAgentResource,
 		NewFileResource,
 		NewVectorStoreResource,
 		NewVectorStoreFileResource,
 		NewDatasetResource,
 		NewIndexResource,
+		NewMemoryStoreResource,
+		NewRoutineResource,
+		NewScheduleResource,
+		NewSkillResource,
+		NewToolboxResource,
+		NewEvaluatorVersionResource,
+		NewEvaluationTaxonomyResource,
+		NewEvaluationResource,
+		NewEvaluationRuleResource,
 	}
 }
 
@@ -135,5 +151,13 @@ func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataS
 	return []func() datasource.DataSource{
 		NewDeploymentsDataSource,
 		NewConnectionsDataSource,
+		NewRoutineDataSource,
+		NewScheduleDataSource,
+		NewSkillDataSource,
+		NewToolboxDataSource,
+		NewEvaluatorVersionDataSource,
+		NewEvaluationTaxonomyDataSource,
+		NewEvaluationDataSource,
+		NewEvaluationRuleDataSource,
 	}
 }

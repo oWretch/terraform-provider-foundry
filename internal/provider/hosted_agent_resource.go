@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = &hostedAgentResource{}
-	_ resource.ResourceWithConfigure   = &hostedAgentResource{}
-	_ resource.ResourceWithImportState = &hostedAgentResource{}
+	_ resource.Resource                   = &hostedAgentResource{}
+	_ resource.ResourceWithConfigure      = &hostedAgentResource{}
+	_ resource.ResourceWithImportState    = &hostedAgentResource{}
+	_ resource.ResourceWithValidateConfig = &hostedAgentResource{}
 )
 
 func NewHostedAgentResource() resource.Resource {
@@ -107,6 +108,15 @@ func (r *hostedAgentResource) Configure(_ context.Context, req resource.Configur
 	r.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
+func (r *hostedAgentResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config hostedAgentModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateDraftPreview(r.client, config.Draft, &resp.Diagnostics)
+}
+
 func (m hostedAgentModel) definition(ctx context.Context, diagnostics *diag.Diagnostics) hostedAgentDefinition {
 	definition := hostedAgentDefinition{
 		Kind:   "hosted",
@@ -126,8 +136,9 @@ func (m hostedAgentModel) definition(ctx context.Context, diagnostics *diag.Diag
 	return definition
 }
 
-func (m *hostedAgentModel) apply(ctx context.Context, version agentVersion, definition hostedAgentDefinition, diagnostics *diag.Diagnostics) {
+func (m *hostedAgentModel) apply(ctx context.Context, version agentVersion, endpoint *agentEndpoint, definition hostedAgentDefinition, diagnostics *diag.Diagnostics) {
 	m.applyVersion(version)
+	m.applyEndpoint(ctx, endpoint, diagnostics)
 	m.Image = types.StringValue(definition.Image)
 	m.CPU = types.StringValue(definition.CPU)
 	m.Memory = types.StringValue(definition.Memory)
@@ -156,7 +167,7 @@ func (r *hostedAgentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	version, err := createAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(ctx, &resp.Diagnostics))
+	version, endpoint, err := createAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(ctx, &resp.Diagnostics), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create hosted agent", err.Error())
 		return
@@ -166,7 +177,7 @@ func (r *hostedAgentResource) Create(ctx context.Context, req resource.CreateReq
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	plan.apply(ctx, version, definition, &resp.Diagnostics)
+	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -177,7 +188,7 @@ func (r *hostedAgentResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	version, err := readAgent(ctx, r.client, state.Name.ValueString())
+	version, endpoint, err := readAgent(ctx, r.client, state.Name.ValueString())
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -191,7 +202,7 @@ func (r *hostedAgentResource) Read(ctx context.Context, req resource.ReadRequest
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	state.apply(ctx, version, definition, &resp.Diagnostics)
+	state.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -202,7 +213,7 @@ func (r *hostedAgentResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(ctx, &resp.Diagnostics))
+	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(ctx, &resp.Diagnostics), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update hosted agent", err.Error())
 		return
@@ -212,7 +223,14 @@ func (r *hostedAgentResource) Update(ctx context.Context, req resource.UpdateReq
 	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
-	plan.apply(ctx, version, definition, &resp.Diagnostics)
+	// updateAgent does not return endpoint metadata, so re-read it to keep the
+	// computed agent_endpoint attribute accurate after publishing a new version.
+	_, endpoint, err := readAgent(ctx, r.client, plan.Name.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read hosted agent endpoint", err.Error())
+		return
+	}
+	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

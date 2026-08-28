@@ -26,7 +26,11 @@ func TestPromptAgentDefinitionRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(encoded, &definition); err != nil {
 		t.Fatalf("unmarshal definition: %v", err)
 	}
-	applied.apply(agentVersion{ID: "a:1", Version: "1"}, definition)
+	var diagnostics diag.Diagnostics
+	applied.apply(context.Background(), agentVersion{ID: "a:1", Version: "1"}, nil, definition, &diagnostics)
+	if diagnostics.HasError() {
+		t.Fatalf("apply diagnostics: %v", diagnostics)
+	}
 
 	if definition.Kind != "prompt" {
 		t.Errorf("kind = %q, want prompt", definition.Kind)
@@ -77,7 +81,7 @@ func TestHostedAgentDefinitionRoundTrip(t *testing.T) {
 	}
 
 	var applied hostedAgentModel
-	applied.apply(ctx, agentVersion{ID: "a:1", Version: "1"}, definition, &diagnostics)
+	applied.apply(ctx, agentVersion{ID: "a:1", Version: "1"}, nil, definition, &diagnostics)
 	if diagnostics.HasError() {
 		t.Fatalf("apply diagnostics: %v", diagnostics)
 	}
@@ -102,7 +106,7 @@ func TestHostedAgentEmptyEnvironmentIsNull(t *testing.T) {
 	ctx := context.Background()
 	var diagnostics diag.Diagnostics
 	var applied hostedAgentModel
-	applied.apply(ctx, agentVersion{}, hostedAgentDefinition{Kind: "hosted"}, &diagnostics)
+	applied.apply(ctx, agentVersion{}, nil, hostedAgentDefinition{Kind: "hosted"}, &diagnostics)
 
 	if !applied.EnvironmentVariables.IsNull() {
 		t.Error("absent environment variables should be null")

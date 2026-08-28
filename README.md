@@ -12,10 +12,31 @@ This repository contains a Terraform provider for the current Microsoft Foundry 
 - `foundry_dataset` — a dataset version registered from a blob file or folder.
 - `foundry_index` — an Azure AI Search-backed index version.
 
+### Preview resources
+
+These require opt-in through the provider's `enable_preview` argument. See [Preview features](#preview-features).
+
+- `foundry_external_agent` — an agent hosted outside Foundry, referenced by endpoint (`external_agents`).
+- `foundry_memory_store` — a memory store backing agent recall (`memory_stores`).
+- `foundry_skill` — a versioned skill and its default version pointer (`skills`).
+- `foundry_toolbox` — a versioned toolbox and its default version pointer (`toolboxes`).
+- `foundry_routine` — a triggered routine that invokes an agent (`routines`).
+- `foundry_schedule` — a schedule that runs an evaluation or insight task (`schedules`).
+- `foundry_evaluator_version` — a code, prompt, rubric, or endpoint evaluator version (`evaluations`).
+- `foundry_evaluation_taxonomy` — an evaluation taxonomy and its risk categories (`evaluations`).
+- `foundry_evaluation` — an evaluation definition and its testing criteria (`evaluations`).
+- `foundry_evaluation_rule` — a continuous evaluation rule (`evaluations`).
+
 ## Data Sources
 
 - `foundry_deployments` — model deployments available to the configured project.
 - `foundry_connections` — connections configured on the account and project, for referencing an existing connection by name.
+
+### Preview data sources
+
+- `foundry_skill`, `foundry_toolbox` — read a specific skill or toolbox version (`skills`, `toolboxes`).
+- `foundry_routine`, `foundry_schedule` — read an existing routine or schedule (`routines`, `schedules`).
+- `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
 The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.24 or later.
 
@@ -89,6 +110,35 @@ The account and project names can also be set with `FOUNDRY_ACCOUNT_NAME` and `F
 | `china` | `services.ai.azure.cn` | `https://ai.azure.cn/.default` |
 
 Set `use_cli = false` or `ARM_USE_CLI=false` to disable the default. API key authentication cannot be combined with an explicitly enabled Microsoft Entra ID mode. The provider does not use `DefaultAzureCredential`; managed identity and workload identity require explicit opt-in.
+
+## Preview features
+
+Some Foundry APIs are still in preview. The resources and data sources built on them are only usable after opting in by name through `enable_preview`:
+
+```hcl
+provider "foundry" {
+  account_name = "example"
+  project_name = "demo"
+
+  enable_preview = ["evaluations", "memory_stores"]
+}
+```
+
+Opt-in is per feature, so enabling one preview family does not enable the others. Using a preview resource or data source without listing its feature fails during `terraform validate` or `terraform plan`, before any API call is made.
+
+| `enable_preview` value | Resources and data sources |
+| --- | --- |
+| `agent_endpoints` | The `agent_endpoint` attribute on agent resources |
+| `draft_agents` | The `draft` attribute on agent resources |
+| `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
+| `external_agents` | `foundry_external_agent` |
+| `memory_stores` | `foundry_memory_store` |
+| `routines` | `foundry_routine` |
+| `schedules` | `foundry_schedule` |
+| `skills` | `foundry_skill` |
+| `toolboxes` | `foundry_toolbox` |
+
+Preview features are exempt from the provider's compatibility guarantees. Their arguments, attributes, and behavior may change in any release, including a patch release, and the underlying preview API may be withdrawn by the service. Do not depend on them where a stable upgrade path matters.
 
 ## Scope
 

@@ -12,4 +12,33 @@ description: |-
 
 {{ tffile "examples/provider/provider.tf" }}
 
+## Preview features
+
+Some Foundry APIs are still in preview. The resources and data sources built on them are only usable after opting in by name through `enable_preview`:
+
+```terraform
+provider "foundry" {
+  account_name = "example"
+  project_name = "demo"
+
+  enable_preview = ["evaluations", "memory_stores"]
+}
+```
+
+Opt-in is per feature, so enabling one preview family does not enable the others. Using a preview resource or data source without listing its feature fails during `terraform validate` or `terraform plan`, before any API call is made.
+
+| `enable_preview` value | Resources and data sources |
+| --- | --- |
+| `agent_endpoints` | The `agent_endpoint` attribute on agent resources |
+| `draft_agents` | The `draft` attribute on agent resources |
+| `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
+| `external_agents` | `foundry_external_agent` |
+| `memory_stores` | `foundry_memory_store` |
+| `routines` | `foundry_routine` |
+| `schedules` | `foundry_schedule` |
+| `skills` | `foundry_skill` |
+| `toolboxes` | `foundry_toolbox` |
+
+~> **Preview features are exempt from this provider's compatibility guarantees.** Their arguments, attributes, and behavior may change in any release, including a patch release, and the underlying preview API may be withdrawn by the service.
+
 {{ .SchemaMarkdown | trimspace }}
