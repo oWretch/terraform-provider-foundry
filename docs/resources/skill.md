@@ -49,7 +49,7 @@ resource "foundry_skill" "from_file" {
 
 ### Optional
 
-- `description` (String) Description of the skill version, shown in skill listings. Maximum 1024 characters. Changing this publishes a new skill version.
+- `description` (String) Description of the skill version, shown in skill listings. Maximum 1024 characters. Changing this publishes a new skill version. When `source_path` is used the service requires a `description` in the file's YAML frontmatter and derives this attribute from it, so it cannot be set alongside `source_path`.
 - `instructions` (String) Inline Markdown instructions for the skill. Mutually exclusive with `source_path`. Changing this publishes a new skill version.
 - `source_hash` (String) Hash of the file at `source_path`, such as `filesha256("path")`. Supply this to force a new skill version when the file contents change without changing `source_path`.
 - `source_path` (String) Local path to a `SKILL.md` file or a `.zip` archive containing one, uploaded as the skill's content. Mutually exclusive with `instructions`. Changing this or `source_hash` publishes a new skill version.

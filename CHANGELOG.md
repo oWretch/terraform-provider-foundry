@@ -43,4 +43,6 @@ This file records user-visible changes to the provider.
 
 ### Fixed
 
+- Skill `instructions` are now recovered when reading a skill, so importing a skill no longer produces a plan that publishes an identical version.
+- Skill `description` is derived from an uploaded skill file when it is not configured, so `source_path` no longer fails with an inconsistent result after apply.
 - Requests to OpenAI-compatible routes under `/openai/v1` no longer send an unsupported `api-version` parameter.

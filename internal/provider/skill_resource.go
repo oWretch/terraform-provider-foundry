@@ -1,14 +1,17 @@
 package provider
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -112,9 +115,15 @@ func (r *skillResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				},
 			},
 			"description": schema.StringAttribute{
-				Optional:            true,
-				MarkdownDescription: "Description of the skill version, shown in skill listings. Maximum 1024 characters. Changing this publishes a new skill version.",
-				Validators:          []validator.String{stringvalidator.LengthAtMost(1024)},
+				Optional: true,
+				Computed: true,
+				MarkdownDescription: "Description of the skill version, shown in skill listings. Maximum 1024 characters. Changing this publishes a new skill version. " +
+					"When `source_path` is used the service requires a `description` in the file's YAML frontmatter and derives this attribute from it, so it cannot be set alongside `source_path`.",
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Validators: []validator.String{
+					stringvalidator.LengthAtMost(1024),
+					stringvalidator.ConflictsWith(path.MatchRoot("source_path")),
+				},
 			},
 			"instructions": schema.StringAttribute{
 				Optional:            true,
@@ -218,6 +227,18 @@ func (r *skillResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	state.applyVersion(version)
 	state.DefaultVersion = types.StringValue(skill.DefaultVersion)
+
+	// The version object omits the skill body, so recover it from the content
+	// archive. Skills tracked by source_path keep instructions null: their
+	// source of truth is the local file, compared via source_hash.
+	if state.SourcePath.IsNull() || state.SourcePath.ValueString() == "" {
+		instructions, err := r.readInstructions(previewCtx, state.Name.ValueString(), skill.DefaultVersion)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read skill instructions", err.Error())
+			return
+		}
+		state.Instructions = optionalString(instructions)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -320,6 +341,62 @@ func (r *skillResource) createVersionFromFile(ctx context.Context, name, sourceP
 		return skillVersionResponse{}, err
 	}
 	return decoded, nil
+}
+
+// readInstructions downloads a skill version's content archive and returns the
+// SKILL.md body. The service stores inline instructions as a zipped SKILL.md
+// and prepends generated YAML frontmatter carrying the skill name and
+// description, so that frontmatter is stripped to recover the text the
+// practitioner configured. Without this, Read leaves instructions null and
+// every plan after an import publishes a spurious new version.
+func (r *skillResource) readInstructions(ctx context.Context, name, version string) (string, error) {
+	request, err := r.client.NewRequest(ctx, http.MethodGet, versionPath("skills", name, version)+"/content", nil)
+	if err != nil {
+		return "", err
+	}
+	response, err := r.client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	archive, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", fmt.Errorf("read skill content: %w", err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		return "", fmt.Errorf("open skill content archive: %w", err)
+	}
+	for _, entry := range reader.File {
+		if entry.Name != "SKILL.md" {
+			continue
+		}
+		file, err := entry.Open()
+		if err != nil {
+			return "", fmt.Errorf("open SKILL.md: %w", err)
+		}
+		defer func() { _ = file.Close() }()
+		contents, err := io.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("read SKILL.md: %w", err)
+		}
+		return stripFrontmatter(string(contents)), nil
+	}
+	return "", nil
+}
+
+// stripFrontmatter removes a leading YAML frontmatter block, which the service
+// generates from the skill name and description rather than storing it as part
+// of the configured instructions.
+func stripFrontmatter(contents string) string {
+	if !strings.HasPrefix(contents, "---\n") {
+		return contents
+	}
+	if _, rest, found := strings.Cut(contents[4:], "\n---\n"); found {
+		return strings.TrimPrefix(rest, "\n")
+	}
+	return contents
 }
 
 // skillNamePattern mirrors the service's documented name validation, so
