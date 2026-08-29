@@ -40,6 +40,14 @@ This file records user-visible changes to the provider.
 - `foundry_evaluation` data source (preview) for looking up an existing evaluation definition by ID. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation_rule` resource (preview) for managing a rule that starts a continuous evaluation run against a `foundry_evaluation` when an agent event occurs; evaluation execution itself is left outside Terraform. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation_rule` data source (preview) for looking up an existing evaluation rule by ID. Requires `enable_preview = ["evaluations"]` on the provider.
+- `foundry_connection` data source for looking up a single connection on the account or project by name, for referencing an existing connection from a tool or index. Connections are created through Azure Resource Manager; the Foundry data plane exposes them read-only.
+- Typed `tools` blocks on the `foundry_toolbox` resource, covering every tool type the service accepts, with per-type argument validation during `terraform validate` and `terraform plan`.
+- `toolbox_tools` preview feature gating the preview tool types available in a toolbox's `tools` block.
+- A warning on every plan naming each preview feature and preview tool type in use, so the exemption from compatibility guarantees stays visible for as long as a preview feature is configured.
+
+### Changed
+
+- The `foundry_toolbox` resource replaces the `tools_json` argument with repeatable typed `tools` blocks. A configuration using `tools_json` must be rewritten; each element of the previous JSON array becomes one `tools` block with the same keys as arguments. The `foundry_toolbox` data source keeps `tools_json` as a computed attribute.
 
 ### Fixed
 

@@ -13,12 +13,17 @@ resource "foundry_toolbox" "my_toolbox" {
   name        = "my-toolbox"
   description = "Toolbox with web search and an attached skill"
 
-  tools_json = jsonencode([
-    {
-      type        = "web_search"
-      description = "Search the web for current information"
-    },
-  ])
+  tools {
+    type        = "web_search"
+    description = "Search the web for current information"
+  }
+
+  tools {
+    type         = "mcp"
+    name         = "docs"
+    server_label = "docs"
+    server_url   = "https://example.com/mcp"
+  }
 
   skills {
     name = foundry_skill.greeting.name

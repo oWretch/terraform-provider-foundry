@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/hashicorp/terraform-plugin-framework/types"
+	"reflect"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
@@ -67,23 +66,18 @@ func promoteDefaultVersion(ctx context.Context, gate previewGate, kind, name, ve
 	return client.JSON(ctx, method, parentPath(kind, name), defaultVersionRequest{DefaultVersion: version}, nil)
 }
 
-// rawJSONOrEmpty converts a nullable/unknown Terraform string holding a JSON
-// document into a json.RawMessage, or nil when the attribute isn't set, so
-// omitempty on the request struct drops it entirely rather than sending "".
-func rawJSONOrEmpty(value types.String) []byte {
-	if value.IsNull() || value.IsUnknown() || value.ValueString() == "" {
-		return nil
+// jsonSemanticallyEqual reports whether two JSON documents encode the same
+// value, ignoring whitespace and object key order, so a service response that
+// only differs in formatting is not treated as a change.
+func jsonSemanticallyEqual(a, b []byte) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
 	}
-	return []byte(value.ValueString())
-}
-
-// stringFromRawJSON renders a json.RawMessage back into a Terraform string
-// attribute, keeping it null when the service omitted the field.
-func stringFromRawJSON(value json.RawMessage) types.String {
-	if len(value) == 0 {
-		return types.StringNull()
+	var left, right any
+	if json.Unmarshal(a, &left) != nil || json.Unmarshal(b, &right) != nil {
+		return false
 	}
-	return types.StringValue(string(value))
+	return reflect.DeepEqual(left, right)
 }
 
 // decodeJSON decodes an HTTP response body into out, used by multipart

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -64,8 +65,9 @@ func (d *toolboxDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 				MarkdownDescription: "Description recorded for this toolbox version.",
 			},
 			"tools_json": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "JSON-encoded array of tool configuration objects for this toolbox version.",
+				Computed: true,
+				MarkdownDescription: "Tools in this toolbox version, as a JSON-encoded array. Tools are exposed as JSON rather than as typed attributes " +
+					"because a data source only reports what the service returns; use `jsondecode` to inspect individual tools.",
 			},
 			"skills": schema.ListNestedAttribute{
 				Computed:            true,
@@ -126,7 +128,12 @@ func (d *toolboxDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	config.ID = types.StringValue(version.ID)
 	config.Description = optionalString(version.Description)
-	config.Tools = stringFromRawJSON(version.Tools)
+	encoded, marshalErr := json.Marshal(version.Tools)
+	if marshalErr != nil {
+		resp.Diagnostics.AddError("Unable to read toolbox tools", marshalErr.Error())
+		return
+	}
+	config.Tools = types.StringValue(string(encoded))
 	if len(version.Skills) == 0 {
 		config.Skills = nil
 	} else {

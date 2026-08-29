@@ -44,7 +44,7 @@ output "toolbox_tools" {
 - `description` (String) Description recorded for this toolbox version.
 - `id` (String) Identifier of the toolbox version.
 - `skills` (Attributes List) Skills attached to this toolbox version. (see [below for nested schema](#nestedatt--skills))
-- `tools_json` (String) JSON-encoded array of tool configuration objects for this toolbox version.
+- `tools_json` (String) Tools in this toolbox version, as a JSON-encoded array. Tools are exposed as JSON rather than as typed attributes because a data source only reports what the service returns; use `jsondecode` to inspect individual tools.
 
 <a id="nestedatt--skills"></a>
 ### Nested Schema for `skills`

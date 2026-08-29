@@ -4,14 +4,14 @@ page_title: "foundry_toolbox Resource - foundry"
 subcategory: ""
 description: |-
   ~> Preview: This resource requires "toolboxes" in the provider's enable_preview attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
-  Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing tools_json, skills, or description publishes a new immutable toolbox version and promotes it to the toolbox's default version.
+  Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing tools, skills, or description publishes a new immutable toolbox version and promotes it to the toolbox's default version.
 ---
 
 # foundry_toolbox (Resource)
 
 ~> **Preview:** This resource requires `"toolboxes"` in the provider's `enable_preview` attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
 
-Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing `tools_json`, `skills`, or `description` publishes a new immutable toolbox version and promotes it to the toolbox's default version.
+Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing `tools`, `skills`, or `description` publishes a new immutable toolbox version and promotes it to the toolbox's default version.
 
 ## Example Usage
 
@@ -31,12 +31,17 @@ resource "foundry_toolbox" "my_toolbox" {
   name        = "my-toolbox"
   description = "Toolbox with web search and an attached skill"
 
-  tools_json = jsonencode([
-    {
-      type        = "web_search"
-      description = "Search the web for current information"
-    },
-  ])
+  tools {
+    type        = "web_search"
+    description = "Search the web for current information"
+  }
+
+  tools {
+    type         = "mcp"
+    name         = "docs"
+    server_label = "docs"
+    server_url   = "https://example.com/mcp"
+  }
 
   skills {
     name = foundry_skill.greeting.name
@@ -56,8 +61,8 @@ resource "foundry_toolbox" "my_toolbox" {
 ### Optional
 
 - `description` (String) Description of the toolbox version. Changing this publishes a new toolbox version.
-- `skills` (Attributes List) Skills attached to the toolbox as MCP resources. At least one of `tools_json` or `skills` must be set. Changing this publishes a new toolbox version. (see [below for nested schema](#nestedatt--skills))
-- `tools_json` (String) JSON-encoded array of tool configuration objects, matching the toolbox version `tools` field (for example `jsonencode([{ type = "web_search" }])`). At least one of `tools_json` or `skills` must be set. Changing this publishes a new toolbox version.
+- `skills` (Attributes List) Skills attached to the toolbox as MCP resources. Changing this publishes a new toolbox version. (see [below for nested schema](#nestedatt--skills))
+- `tools` (Block List) Tools exposed by this toolbox version. At least one tool is required. A toolbox allows only one tool of a given type without a `name`, so set a unique `name` on each instance when using the same type more than once. (see [below for nested schema](#nestedblock--tools))
 
 ### Read-Only
 
@@ -75,3 +80,66 @@ Required:
 Optional:
 
 - `version` (String) Skill version to pin the reference to. Omit to follow the skill's default version.
+
+
+<a id="nestedblock--tools"></a>
+### Nested Schema for `tools`
+
+Required:
+
+- `type` (String) Tool type. One of `code_interpreter`, `file_search`, `web_search`, `mcp`, `azure_ai_search`, `openapi`, `a2a`, `toolbox_search`, `a2a_preview`, `browser_automation_preview`, `reminder_preview`, `work_iq_preview`, `fabric_iq_preview`, `toolbox_search_preview`. Types ending in `_preview` are in preview and require `"toolbox_tools"` in the provider's `enable_preview` attribute.
+
+Optional:
+
+- `a2a_version` (String) A2A protocol version. Required for `a2a`, which currently supports only `1.0`. Not accepted by `a2a_preview`.
+- `agent_card_path` (String) Path to the remote agent's agent card, such as `/.well-known/agent-card.json`.
+- `allowed_tools` (Set of String) Restricts an `mcp` tool to these tool names. Omit to allow every tool the server exposes.
+- `base_url` (String) Base URL of the remote agent, for `a2a` and `a2a_preview`. Supply at least one of `base_url` or `project_connection_id`.
+- `connector_id` (String) Identifier of a Microsoft first-party connector for an `mcp` tool, such as `connector_sharepoint` or `connector_microsoftteams`. The service treats this as an open set, so values beyond the documented connectors are accepted.
+- `custom_search_configuration` (Block, Optional) Grounds a `web_search` tool in a Bing Custom Search instance covering selected domains. (see [below for nested schema](#nestedblock--tools--custom_search_configuration))
+- `description` (String) Description of this tool instance, used by the model to select the right tool.
+- `headers` (Map of String) Additional HTTP headers sent to an `mcp` server. Avoid placing secrets here, since values are stored in state.
+- `index` (Block, Optional) Index searched by an `azure_ai_search` tool. Supply either `project_connection_id` with `index_name`, or `index_asset_id`. The service accepts a single index per tool. (see [below for nested schema](#nestedblock--tools--index))
+- `max_num_results` (Number) Maximum number of results returned by a `file_search` tool.
+- `name` (String) Name for this tool instance, used to disambiguate multiple tools of the same type.
+- `openapi` (Block, Optional) OpenAPI specification exposed by an `openapi` tool. (see [below for nested schema](#nestedblock--tools--openapi))
+- `project_connection_id` (String) Project connection supplying credentials for this tool. Required for `work_iq_preview`, `fabric_iq_preview`, and `browser_automation_preview`; one option among several for `mcp` and `a2a`. Connections are created outside this provider, in Azure Resource Manager.
+- `require_approval` (String) Whether tool calls require approval, either `always` or `never`. Applies to `mcp` and `fabric_iq_preview`. Defaults to `always` at the service.
+- `search_context_size` (String) Amount of search context retrieved for a `web_search` tool: `low`, `medium`, or `high`.
+- `server_label` (String) Label identifying the MCP server. Required for `mcp`; optional for `fabric_iq_preview`.
+- `server_url` (String) URL of the MCP server. For `mcp`, supply exactly one of `server_url`, `connector_id`, or `project_connection_id`.
+- `vector_store_ids` (Set of String) Vector stores searched by a `file_search` tool.
+
+<a id="nestedblock--tools--custom_search_configuration"></a>
+### Nested Schema for `tools.custom_search_configuration`
+
+Optional:
+
+- `instance_name` (String) Custom Search instance name.
+- `project_connection_id` (String) Project connection for the Bing Custom Search resource.
+
+
+<a id="nestedblock--tools--index"></a>
+### Nested Schema for `tools.index`
+
+Optional:
+
+- `filter` (String) OData filter applied to the index query.
+- `index_asset_id` (String) Identifier of an index asset, used instead of a connection and index name.
+- `index_name` (String) Name of the search index.
+- `project_connection_id` (String) Project connection for the Azure AI Search service.
+- `query_type` (String) Query strategy: `simple`, `semantic`, `vector`, `vector_simple_hybrid`, or `vector_semantic_hybrid`.
+- `top_k` (Number) Number of results retrieved from the index.
+
+
+<a id="nestedblock--tools--openapi"></a>
+### Nested Schema for `tools.openapi`
+
+Optional:
+
+- `audience` (String) Token audience for managed identity authentication. Required when `auth_type` is `managed_identity`.
+- `auth_type` (String) Authentication for the API: `anonymous`, `project_connection`, or `managed_identity`.
+- `description` (String) Description of the OpenAPI function.
+- `name` (String) Name of the OpenAPI function.
+- `project_connection_id` (String) Project connection supplying API credentials. Required when `auth_type` is `project_connection`.
+- `spec` (String) JSON-encoded OpenAPI specification, for example `file("api.json")` or `jsonencode({ ... })`.

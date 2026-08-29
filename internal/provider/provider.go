@@ -153,6 +153,7 @@ func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataS
 		NewConnectionsDataSource,
 		NewRoutineDataSource,
 		NewScheduleDataSource,
+		NewConnectionDataSource,
 		NewSkillDataSource,
 		NewToolboxDataSource,
 		NewEvaluatorVersionDataSource,

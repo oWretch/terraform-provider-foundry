@@ -20,7 +20,7 @@ func TestToolboxModelApplyVersionRoundTrip(t *testing.T) {
 		Name:        "my-toolbox",
 		Version:     "1",
 		Description: "Toolbox with a skill reference",
-		Tools:       json.RawMessage(`[{"type":"web_search"}]`),
+		Tools:       []toolRequest{{Type: "web_search"}},
 		Skills:      []toolboxSkillReference{{Type: "skill_reference", Name: "greeting"}},
 	}
 
@@ -36,8 +36,8 @@ func TestToolboxModelApplyVersionRoundTrip(t *testing.T) {
 	if model.Description.ValueString() != "Toolbox with a skill reference" {
 		t.Errorf("description = %q", model.Description.ValueString())
 	}
-	if model.Tools.ValueString() != `[{"type":"web_search"}]` {
-		t.Errorf("tools_json = %q", model.Tools.ValueString())
+	if len(model.Tools) != 1 || model.Tools[0].Type.ValueString() != "web_search" {
+		t.Errorf("tools = %+v", model.Tools)
 	}
 	if len(model.Skills) != 1 || model.Skills[0].Name.ValueString() != "greeting" {
 		t.Fatalf("skills = %+v", model.Skills)

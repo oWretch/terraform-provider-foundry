@@ -25,9 +25,14 @@ func (g previewGate) previewContext(ctx context.Context) (context.Context, error
 	return g.client.WithPreviewFeature(ctx, g.name, g.feature)
 }
 
-func (g previewGate) validate(diagnostics interface {
+// previewDiagnostics is the subset of diag.Diagnostics the gate needs, so that
+// the same validation serves both resources and data sources.
+type previewDiagnostics interface {
 	AddError(summary, detail string)
-}) {
+	AddWarning(summary, detail string)
+}
+
+func (g previewGate) validate(diagnostics previewDiagnostics) {
 	// client is nil until Configure runs; an unconfigured `terraform validate`
 	// skips this check and the same error surfaces at plan time instead.
 	if g.client == nil {
@@ -38,7 +43,16 @@ func (g previewGate) validate(diagnostics interface {
 			"Preview feature not enabled",
 			`This resource requires the "`+g.name+`" preview feature. Add it to the provider's enable_preview attribute to use it.`,
 		)
+		return
 	}
+	// Warn on every plan and apply, not just on first use. Preview features
+	// are excluded from the provider's compatibility guarantees, so the
+	// reminder stays visible for as long as the opt-in is in place.
+	diagnostics.AddWarning(
+		"Preview feature in use",
+		`This uses the "`+g.name+`" preview feature. Its schema and behavior may change in any provider release without a major version bump, `+
+			"and reaching general availability may require updating this configuration.",
+	)
 }
 
 func (g previewGate) ValidateResourceConfig(_ context.Context, _ resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
