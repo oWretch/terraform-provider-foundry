@@ -24,7 +24,7 @@ resource "foundry_hosted_agent" "checkout" {
     LOG_LEVEL = "info"
   }
 
-  container_protocol_versions = [{
+  protocol_versions = [{
     protocol = "responses"
     version  = "1"
   }]
@@ -36,7 +36,6 @@ resource "foundry_hosted_agent" "checkout" {
 
 ### Required
 
-- `container_protocol_versions` (Attributes List) Protocols the container implements. (see [below for nested schema](#nestedatt--container_protocol_versions))
 - `cpu` (String) CPU cores allocated to the container, such as `1`.
 - `image` (String) Container image in `<registry>/<repository>[:<tag>|@<digest>]` form.
 - `memory` (String) Memory allocated to the container, such as `2Gi`.
@@ -49,6 +48,9 @@ resource "foundry_hosted_agent" "checkout" {
 
 When `true`, publishing a new definition creates a mutable draft version instead of an immutable numbered version. Defaults to `false`.
 - `environment_variables` (Map of String) Environment variables passed to the container. Do not place secrets here, because Terraform stores them in state.
+- `protocol_versions` (Attributes List) Protocols the container implements. (see [below for nested schema](#nestedatt--protocol_versions))
+- `rai_config` (Attributes) Responsible AI policy applied to the agent. (see [below for nested schema](#nestedatt--rai_config))
+- `registry_connection_id` (String) Foundry project connection used to authenticate to the container registry.
 
 ### Read-Only
 
@@ -61,13 +63,21 @@ The agent's built-in endpoint, including how traffic is routed across published 
 - `principal_id` (String) Principal ID of the agent instance identity.
 - `version` (String) Current agent version number.
 
-<a id="nestedatt--container_protocol_versions"></a>
-### Nested Schema for `container_protocol_versions`
+<a id="nestedatt--protocol_versions"></a>
+### Nested Schema for `protocol_versions`
 
 Required:
 
 - `protocol` (String) Protocol name, such as `responses`.
 - `version` (String) Protocol version implemented by the container.
+
+
+<a id="nestedatt--rai_config"></a>
+### Nested Schema for `rai_config`
+
+Required:
+
+- `rai_policy_name` (String) Name of the Responsible AI policy.
 
 
 <a id="nestedatt--agent_endpoint"></a>

@@ -29,10 +29,8 @@ provider "foundry" {
 resource "foundry_external_agent" "legacy_support_bot" {
   name        = "legacy-support-bot"
   description = "Support bot hosted outside Foundry, registered for observability only."
-  endpoint    = "https://support-bot.contoso.com/agent"
 
-  # Foundry never calls this endpoint. It only correlates OpenTelemetry
-  # traces the external agent emits, tagged with this identifier.
+  # Foundry correlates OpenTelemetry traces tagged with this identifier.
   otel_agent_id = "legacy-support-bot"
 }
 ```
@@ -42,7 +40,6 @@ resource "foundry_external_agent" "legacy_support_bot" {
 
 ### Required
 
-- `endpoint` (String) URL of the externally hosted agent. Foundry stores this for reference only, it never calls this endpoint.
 - `name` (String) Agent name. Changing this forces a new agent to be created.
 
 ### Optional
@@ -52,6 +49,7 @@ resource "foundry_external_agent" "legacy_support_bot" {
 
 When `true`, publishing a new definition creates a mutable draft version instead of an immutable numbered version. Defaults to `false`.
 - `otel_agent_id` (String) Identifier the external agent tags its OpenTelemetry traces with so Foundry can correlate them. Defaults to the agent name.
+- `rai_config` (Attributes) Responsible AI policy applied to the agent. (see [below for nested schema](#nestedatt--rai_config))
 
 ### Read-Only
 
@@ -63,6 +61,14 @@ The agent's built-in endpoint, including how traffic is routed across published 
 - `id` (String) Identifier of the current agent version, in `name:version` form.
 - `principal_id` (String) Principal ID of the agent instance identity.
 - `version` (String) Current agent version number.
+
+<a id="nestedatt--rai_config"></a>
+### Nested Schema for `rai_config`
+
+Required:
+
+- `rai_policy_name` (String) Name of the Responsible AI policy.
+
 
 <a id="nestedatt--agent_endpoint"></a>
 ### Nested Schema for `agent_endpoint`

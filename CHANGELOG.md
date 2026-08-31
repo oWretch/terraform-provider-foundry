@@ -26,6 +26,7 @@ This file records user-visible changes to the provider.
 - `foundry_schedule` resource (preview) for managing a schedule that runs an evaluation or insight task on a cron, recurrence, or one-time trigger. Requires `enable_preview = ["schedules"]` on the provider.
 - `foundry_schedule` data source (preview) for looking up an existing schedule by ID. Requires `enable_preview = ["schedules"]` on the provider.
 - `foundry_external_agent` resource (preview) for registering an agent hosted outside Foundry for observability, tracing, and evaluation only. Requires `enable_preview = ["external_agents"]` on the provider.
+- `foundry_prompt_agent`, `foundry_hosted_agent`, and `foundry_external_agent` data sources for looking up the latest agent version by name. The external agent data source requires `enable_preview = ["external_agents"]`.
 - `draft` attribute (preview) on `foundry_prompt_agent` and `foundry_hosted_agent`, publishing a mutable draft version instead of an immutable numbered version. Requires `enable_preview = ["draft_agents"]` on the provider.
 - `agent_endpoint` computed attribute (preview) on `foundry_prompt_agent` and `foundry_hosted_agent`, surfacing the agent's built-in endpoint protocols and version traffic routing rules. Documented as requiring `enable_preview = ["agent_endpoints"]`; verified live that the service currently populates this field without any `Foundry-Features` header, but the attribute is treated as preview and may change without following semver.
 - `foundry_skill` resource (preview) for managing a named skill, the single owner of its immutable version chain and `default_version` pointer. Create publishes the first version from inline instructions or an uploaded `SKILL.md`/`.zip` file; any change publishes a new version and promotes it to default. Requires `enable_preview = ["skills"]` on the provider.
@@ -52,6 +53,7 @@ This file records user-visible changes to the provider.
 
 ### Changed
 
+- Agent resources now use the current v1 API definitions. Hosted agents use `container_configuration` and `protocol_versions`, external agents use `otel_agent_id`, and resources reject imported definitions or version metadata that an update would discard.
 - The `foundry_toolbox` resource replaces the `tools_json` argument with repeatable typed `tools` blocks. A configuration using `tools_json` must be rewritten; each element of the previous JSON array becomes one `tools` block with the same keys as arguments. The `foundry_toolbox` data source keeps `tools_json` as a computed attribute.
 
 ### Fixed

@@ -9,7 +9,7 @@ resource "foundry_hosted_agent" "checkout" {
     LOG_LEVEL = "info"
   }
 
-  container_protocol_versions = [{
+  protocol_versions = [{
     protocol = "responses"
     version  = "1"
   }]

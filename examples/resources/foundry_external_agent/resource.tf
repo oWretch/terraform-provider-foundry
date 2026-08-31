@@ -11,9 +11,7 @@ provider "foundry" {
 resource "foundry_external_agent" "legacy_support_bot" {
   name        = "legacy-support-bot"
   description = "Support bot hosted outside Foundry, registered for observability only."
-  endpoint    = "https://support-bot.contoso.com/agent"
 
-  # Foundry never calls this endpoint. It only correlates OpenTelemetry
-  # traces the external agent emits, tagged with this identifier.
+  # Foundry correlates OpenTelemetry traces tagged with this identifier.
   otel_agent_id = "legacy-support-bot"
 }

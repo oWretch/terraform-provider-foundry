@@ -1,16 +1,22 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
@@ -53,6 +59,18 @@ var agentEndpointAttrTypes = map[string]attr.Type{
 	"version_selection_rules": types.ListType{ElemType: types.ObjectType{AttrTypes: agentEndpointRuleAttrTypes}},
 }
 
+var raiConfigAttrTypes = map[string]attr.Type{
+	"rai_policy_name": types.StringType,
+}
+
+var agentNameValidators = []validator.String{
+	stringvalidator.LengthAtMost(63),
+	stringvalidator.RegexMatches(
+		regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`),
+		"must start and end with an alphanumeric character and contain only alphanumeric characters and middle hyphens",
+	),
+}
+
 // agentCommonSchema returns the attributes every agent resource exposes.
 func agentCommonSchema() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
@@ -60,6 +78,7 @@ func agentCommonSchema() map[string]schema.Attribute {
 			Required:            true,
 			MarkdownDescription: "Agent name. Changing this forces a new agent to be created.",
 			PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+			Validators:          agentNameValidators,
 		},
 		"description": schema.StringAttribute{
 			Optional:            true,
@@ -131,6 +150,32 @@ type agentIdentity struct {
 	ClientID    string `json:"client_id"`
 }
 
+type raiConfig struct {
+	PolicyName string `json:"rai_policy_name"`
+}
+
+func raiConfigDefinition(value types.Object) *raiConfig {
+	if value.IsNull() || value.IsUnknown() {
+		return nil
+	}
+	policyName, ok := value.Attributes()["rai_policy_name"].(types.String)
+	if !ok || policyName.IsNull() || policyName.IsUnknown() {
+		return nil
+	}
+	return &raiConfig{PolicyName: policyName.ValueString()}
+}
+
+func raiConfigValue(value *raiConfig, diagnostics *diag.Diagnostics) types.Object {
+	if value == nil {
+		return types.ObjectNull(raiConfigAttrTypes)
+	}
+	result, diags := types.ObjectValue(raiConfigAttrTypes, map[string]attr.Value{
+		"rai_policy_name": types.StringValue(value.PolicyName),
+	})
+	diagnostics.Append(diags...)
+	return result
+}
+
 type agentEndpointRule struct {
 	Type              string `json:"type"`
 	AgentVersion      string `json:"agent_version"`
@@ -147,20 +192,47 @@ type agentEndpoint struct {
 // agentVersion is the service representation of a single immutable agent version.
 // Definition stays raw so each kind can decode only the fields it models.
 type agentVersion struct {
-	ID          string          `json:"id"`
-	Version     string          `json:"version"`
-	Description string          `json:"description"`
-	Definition  json.RawMessage `json:"definition"`
-	AgentGUID   string          `json:"agent_guid"`
-	Identity    *agentIdentity  `json:"instance_identity"`
-	Draft       bool            `json:"draft"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Version            string            `json:"version"`
+	Description        string            `json:"description"`
+	Metadata           map[string]string `json:"metadata"`
+	CreatedAt          int64             `json:"created_at"`
+	Status             string            `json:"status"`
+	Definition         json.RawMessage   `json:"definition"`
+	Blueprint          json.RawMessage   `json:"blueprint"`
+	BlueprintReference json.RawMessage   `json:"blueprint_reference"`
+	AgentGUID          string            `json:"agent_guid"`
+	Identity           *agentIdentity    `json:"instance_identity"`
+	Draft              bool              `json:"draft"`
 }
 
 type agentResponse struct {
-	Versions struct {
+	Name               string          `json:"name"`
+	Identity           *agentIdentity  `json:"instance_identity"`
+	Blueprint          json.RawMessage `json:"blueprint"`
+	BlueprintReference json.RawMessage `json:"blueprint_reference"`
+	Versions           struct {
 		Latest agentVersion `json:"latest"`
 	} `json:"versions"`
 	AgentEndpoint *agentEndpoint `json:"agent_endpoint"`
+}
+
+func (r agentResponse) latestVersion() agentVersion {
+	version := r.Versions.Latest
+	if version.Name == "" {
+		version.Name = r.Name
+	}
+	if version.Identity == nil {
+		version.Identity = r.Identity
+	}
+	if !hasJSONValue(version.Blueprint) {
+		version.Blueprint = r.Blueprint
+	}
+	if !hasJSONValue(version.BlueprintReference) {
+		version.BlueprintReference = r.BlueprintReference
+	}
+	return version
 }
 
 type agentRequest struct {
@@ -238,21 +310,21 @@ func createAgent(ctx context.Context, client *clients.Client, name, description 
 		Definition:  definition,
 		Draft:       draft,
 	}, &created)
-	return created.Versions.Latest, created.AgentEndpoint, err
+	return created.latestVersion(), created.AgentEndpoint, err
 }
 
 // readAgent returns the latest version of an agent, along with its endpoint metadata.
 func readAgent(ctx context.Context, client *clients.Client, name string) (agentVersion, *agentEndpoint, error) {
 	var agent agentResponse
-	err := client.JSON(ctx, http.MethodGet, "agents/"+name, nil, &agent)
-	return agent.Versions.Latest, agent.AgentEndpoint, err
+	err := client.JSON(ctx, http.MethodGet, "agents/"+url.PathEscape(name), nil, &agent)
+	return agent.latestVersion(), agent.AgentEndpoint, err
 }
 
 // updateAgent publishes a new version, because the service treats each agent
 // version as immutable and PATCH does not change the definition.
 func updateAgent(ctx context.Context, client *clients.Client, name, description string, definition any, draft bool) (agentVersion, error) {
 	var version agentVersion
-	err := client.JSON(ctx, http.MethodPost, "agents/"+name+"/versions", agentRequest{
+	err := client.JSON(ctx, http.MethodPost, "agents/"+url.PathEscape(name)+"/versions", agentRequest{
 		Description: description,
 		Definition:  definition,
 		Draft:       draft,
@@ -260,9 +332,18 @@ func updateAgent(ctx context.Context, client *clients.Client, name, description 
 	return version, err
 }
 
+func validateAgentBeforeUpdate(ctx context.Context, client *clients.Client, name string, target supportedAgentDefinition, diagnostics *diag.Diagnostics) bool {
+	version, _, err := readAgent(ctx, client, name)
+	if err != nil {
+		diagnostics.AddError("Unable to read "+target.expectedKind()+" agent before update", err.Error())
+		return false
+	}
+	return decodeManagedDefinition(version, target, diagnostics)
+}
+
 // deleteAgent removes an agent, treating an already-absent agent as success.
 func deleteAgent(ctx context.Context, client *clients.Client, name string) error {
-	err := client.JSON(ctx, http.MethodDelete, "agents/"+name, nil, nil)
+	err := client.JSON(ctx, http.MethodDelete, "agents/"+url.PathEscape(name), nil, nil)
 	if clients.IsNotFound(err) {
 		return nil
 	}
@@ -298,11 +379,76 @@ func validateDraftPreview(client *clients.Client, draft types.Bool, diagnostics 
 	}
 }
 
-// decodeDefinition unmarshals an agent definition into a kind-specific struct.
-func decodeDefinition(version agentVersion, target any, diagnostics *diag.Diagnostics) bool {
+type supportedAgentDefinition interface {
+	expectedKind() string
+	validateSupported() error
+}
+
+// decodeDefinition unmarshals an agent definition after verifying its kind.
+func decodeDefinition(version agentVersion, target supportedAgentDefinition, diagnostics *diag.Diagnostics) bool {
+	var header struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(version.Definition, &header); err != nil {
+		diagnostics.AddError("Unable to decode agent definition", err.Error())
+		return false
+	}
+	if header.Kind != target.expectedKind() {
+		diagnostics.AddError(
+			"Unexpected agent definition kind",
+			fmt.Sprintf("Expected %q, but the service returned %q.", target.expectedKind(), header.Kind),
+		)
+		return false
+	}
 	if err := json.Unmarshal(version.Definition, target); err != nil {
 		diagnostics.AddError("Unable to decode agent definition", err.Error())
 		return false
 	}
 	return true
+}
+
+// decodeManagedDefinition rejects fields a resource would discard when it
+// publishes the next immutable agent version.
+func decodeManagedDefinition(version agentVersion, target supportedAgentDefinition, diagnostics *diag.Diagnostics) bool {
+	if !decodeDefinition(version, target, diagnostics) {
+		return false
+	}
+	if err := target.validateSupported(); err != nil {
+		diagnostics.AddError("Unsupported "+target.expectedKind()+" agent definition", err.Error())
+		return false
+	}
+	var fields []string
+	if len(version.Metadata) > 0 {
+		fields = append(fields, "metadata")
+	}
+	if hasJSONValue(version.Blueprint) {
+		fields = append(fields, "blueprint")
+	}
+	if hasJSONValue(version.BlueprintReference) {
+		fields = append(fields, "blueprint_reference")
+	}
+	if len(fields) > 0 {
+		diagnostics.AddError(
+			"Unsupported agent version fields",
+			fmt.Sprintf(
+				"The service returned unsupported version fields (%s); remove them before managing this agent because an update would otherwise discard them.",
+				strings.Join(fields, ", "),
+			),
+		)
+		return false
+	}
+	return true
+}
+
+func hasJSONValue(value json.RawMessage) bool {
+	value = bytes.TrimSpace(value)
+	return len(value) > 0 && !bytes.Equal(value, []byte("null"))
+}
+
+func hasMaterialJSON(value json.RawMessage) bool {
+	if !hasJSONValue(value) {
+		return false
+	}
+	value = bytes.TrimSpace(value)
+	return !bytes.Equal(value, []byte("{}")) && !bytes.Equal(value, []byte("[]"))
 }

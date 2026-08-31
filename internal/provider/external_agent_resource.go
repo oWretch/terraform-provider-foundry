@@ -33,8 +33,8 @@ type externalAgentResource struct {
 
 type externalAgentModel struct {
 	agentCommon
-	Endpoint    types.String `tfsdk:"endpoint"`
 	OtelAgentID types.String `tfsdk:"otel_agent_id"`
+	RAIConfig   types.Object `tfsdk:"rai_config"`
 }
 
 // externalAgentDefinition is the service representation of an external agent.
@@ -42,15 +42,15 @@ type externalAgentModel struct {
 // otel_agent_id defaults it to the agent name, so this provider always sends
 // it explicitly to keep state deterministic.
 type externalAgentDefinition struct {
-	Kind        string `json:"kind"`
-	Endpoint    string `json:"endpoint"`
-	OtelAgentID string `json:"otel_agent_id,omitempty"`
+	Kind        string     `json:"kind"`
+	OtelAgentID string     `json:"otel_agent_id,omitempty"`
+	RAIConfig   *raiConfig `json:"rai_config,omitempty"`
 }
 
 func (m externalAgentModel) definition() externalAgentDefinition {
 	definition := externalAgentDefinition{
-		Kind:     "external",
-		Endpoint: m.Endpoint.ValueString(),
+		Kind:      "external",
+		RAIConfig: raiConfigDefinition(m.RAIConfig),
 	}
 	if !m.OtelAgentID.IsNull() && !m.OtelAgentID.IsUnknown() {
 		definition.OtelAgentID = m.OtelAgentID.ValueString()
@@ -60,11 +60,19 @@ func (m externalAgentModel) definition() externalAgentDefinition {
 	return definition
 }
 
+func (*externalAgentDefinition) expectedKind() string {
+	return "external"
+}
+
+func (d *externalAgentDefinition) validateSupported() error {
+	return nil
+}
+
 func (m *externalAgentModel) apply(ctx context.Context, version agentVersion, endpoint *agentEndpoint, definition externalAgentDefinition, diagnostics *diag.Diagnostics) {
 	m.applyVersion(version)
 	m.applyEndpoint(ctx, endpoint, diagnostics)
-	m.Endpoint = types.StringValue(definition.Endpoint)
 	m.OtelAgentID = optionalString(definition.OtelAgentID)
+	m.RAIConfig = raiConfigValue(definition.RAIConfig, diagnostics)
 }
 
 func (r *externalAgentResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -73,14 +81,20 @@ func (r *externalAgentResource) Metadata(_ context.Context, req resource.Metadat
 
 func (r *externalAgentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	attributes := agentCommonSchema()
-	attributes["endpoint"] = schema.StringAttribute{
-		Required:            true,
-		MarkdownDescription: "URL of the externally hosted agent. Foundry stores this for reference only, it never calls this endpoint.",
-	}
 	attributes["otel_agent_id"] = schema.StringAttribute{
 		Optional:            true,
 		Computed:            true,
 		MarkdownDescription: "Identifier the external agent tags its OpenTelemetry traces with so Foundry can correlate them. Defaults to the agent name.",
+	}
+	attributes["rai_config"] = schema.SingleNestedAttribute{
+		Optional:            true,
+		MarkdownDescription: "Responsible AI policy applied to the agent.",
+		Attributes: map[string]schema.Attribute{
+			"rai_policy_name": schema.StringAttribute{
+				Required:            true,
+				MarkdownDescription: "Name of the Responsible AI policy.",
+			},
+		},
 	}
 
 	resp.Schema = schema.Schema{
@@ -137,7 +151,7 @@ func (r *externalAgentResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	var definition externalAgentDefinition
-	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
+	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
 	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
@@ -167,7 +181,7 @@ func (r *externalAgentResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	var definition externalAgentDefinition
-	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
+	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
 	state.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
@@ -186,6 +200,11 @@ func (r *externalAgentResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
+	var current externalAgentDefinition
+	if !validateAgentBeforeUpdate(ctx, r.client, plan.Name.ValueString(), &current, &resp.Diagnostics) {
+		return
+	}
+
 	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update external agent", err.Error())
@@ -193,7 +212,7 @@ func (r *externalAgentResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	var definition externalAgentDefinition
-	if !decodeDefinition(version, &definition, &resp.Diagnostics) {
+	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
 	// updateAgent does not return endpoint metadata, so re-read it to keep the

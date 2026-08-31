@@ -16,7 +16,7 @@ This repository contains a Terraform provider for the current Microsoft Foundry 
 
 These require opt-in through the provider's `enable_preview` argument. See [Preview features](#preview-features).
 
-- `foundry_external_agent` — an agent hosted outside Foundry, referenced by endpoint (`external_agents`).
+- `foundry_external_agent` — an agent hosted outside Foundry, registered for observability (`external_agents`).
 - `foundry_memory_store` — a memory store backing agent recall (`memory_stores`).
 - `foundry_skill` — a versioned skill and its default version pointer (`skills`).
 - `foundry_toolbox` — a versioned toolbox and its default version pointer (`toolboxes`).
@@ -31,10 +31,12 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 
 - `foundry_deployments` — model deployments available to the configured project.
 - `foundry_connections` — connections configured on the account and project, for referencing an existing connection by name.
+- `foundry_prompt_agent`, `foundry_hosted_agent` — read the latest version of an agent by name.
 
 ### Preview data sources
 
 - `foundry_skill`, `foundry_toolbox` — read a specific skill or toolbox version (`skills`, `toolboxes`).
+- `foundry_external_agent` — read the latest external agent version by name (`external_agents`).
 - `foundry_routine`, `foundry_schedule` — read an existing routine or schedule (`routines`, `schedules`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
