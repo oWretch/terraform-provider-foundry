@@ -44,6 +44,8 @@ This file records user-visible changes to the provider.
 - Typed `tools` blocks on the `foundry_toolbox` resource, covering every tool type the service accepts, with per-type argument validation during `terraform validate` and `terraform plan`.
 - `toolbox_tools` preview feature gating the preview tool types available in a toolbox's `tools` block.
 - A warning on every plan naming each preview feature and preview tool type in use, so the exemption from compatibility guarantees stays visible for as long as a preview feature is configured.
+- `foundry_model_version` resource for uploading a custom model artifact and registering it as a model version, including `LoRA` adapters. The artifact is uploaded to service-managed storage through the pending-upload handshake, because the model registry only issues a container SAS for storage it manages and rejects a practitioner's own blob URI.
+- `foundry_model_version` data source for looking up an existing model version by name and version.
 
 ### Changed
 
