@@ -54,4 +54,5 @@ This file records user-visible changes to the provider.
 - Skill `instructions` are now recovered when reading a skill, so importing a skill no longer produces a plan that publishes an identical version.
 - Skill `description` is derived from an uploaded skill file when it is not configured, so `source_path` no longer fails with an inconsistent result after apply.
 - The `foundry_skill` data source now returns `instructions`, which it previously omitted even though the skill body is the point of looking one up.
+- The `server_label` that the service derives from a `fabric_iq_preview` tool's `project_connection_id` is no longer written to state, so a toolbox using that tool applies and imports without a spurious difference.
 - Requests to OpenAI-compatible routes under `/openai/v1` no longer send an unsupported `api-version` parameter.

@@ -322,3 +322,33 @@ func TestFlattenToolsRoundTrip(t *testing.T) {
 		t.Error("blocks belonging to other tool types should be null")
 	}
 }
+
+// TestFlattenToolsDropsDerivedFabricIQServerLabel pins that the server_label
+// the service derives from a fabric_iq_preview connection is discarded, since
+// keeping it fails the apply-consistency check against a config that never set
+// it.
+func TestFlattenToolsDropsDerivedFabricIQServerLabel(t *testing.T) {
+	t.Parallel()
+
+	derived := flattenTools([]toolRequest{{
+		Type:                toolTypeFabricIQPreview,
+		Name:                "fabriciq",
+		ProjectConnectionID: "my-connection",
+		ServerLabel:         "my-connection",
+	}}, nil)
+	if !derived[0].ServerLabel.IsNull() {
+		t.Errorf("derived server_label should be dropped, got %q", derived[0].ServerLabel.ValueString())
+	}
+
+	// A label the practitioner actually chose differs from the connection and
+	// must survive.
+	explicit := flattenTools([]toolRequest{{
+		Type:                toolTypeFabricIQPreview,
+		Name:                "fabriciq",
+		ProjectConnectionID: "my-connection",
+		ServerLabel:         "chosen-label",
+	}}, nil)
+	if explicit[0].ServerLabel.ValueString() != "chosen-label" {
+		t.Errorf("explicit server_label should be kept, got %q", explicit[0].ServerLabel.ValueString())
+	}
+}

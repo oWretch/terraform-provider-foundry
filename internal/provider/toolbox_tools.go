@@ -763,6 +763,13 @@ func flattenTools(responses []toolRequest, prior []toolModel) []toolModel {
 		if response.BrowserAutomation != nil {
 			tool.ProjectConnectionID = optionalString(response.BrowserAutomation.Connection.ProjectConnectionID)
 		}
+		// fabric_iq_preview echoes back a server_label the service derived from
+		// project_connection_id, which the practitioner never configured. Keeping
+		// it would fail the apply-consistency check on create and leave a
+		// permanent diff after an import, so the derived value is discarded.
+		if response.Type == toolTypeFabricIQPreview && response.ServerLabel == response.ProjectConnectionID {
+			tool.ServerLabel = types.StringNull()
+		}
 		tools = append(tools, tool)
 	}
 	return tools
