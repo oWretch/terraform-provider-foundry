@@ -232,7 +232,7 @@ func (r *skillResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// archive. Skills tracked by source_path keep instructions null: their
 	// source of truth is the local file, compared via source_hash.
 	if state.SourcePath.IsNull() || state.SourcePath.ValueString() == "" {
-		instructions, err := r.readInstructions(previewCtx, state.Name.ValueString(), skill.DefaultVersion)
+		instructions, err := readSkillInstructions(previewCtx, r.client, state.Name.ValueString(), skill.DefaultVersion)
 		if err != nil {
 			resp.Diagnostics.AddError("Unable to read skill instructions", err.Error())
 			return
@@ -349,12 +349,12 @@ func (r *skillResource) createVersionFromFile(ctx context.Context, name, sourceP
 // description, so that frontmatter is stripped to recover the text the
 // practitioner configured. Without this, Read leaves instructions null and
 // every plan after an import publishes a spurious new version.
-func (r *skillResource) readInstructions(ctx context.Context, name, version string) (string, error) {
-	request, err := r.client.NewRequest(ctx, http.MethodGet, versionPath("skills", name, version)+"/content", nil)
+func readSkillInstructions(ctx context.Context, client *clients.Client, name, version string) (string, error) {
+	request, err := client.NewRequest(ctx, http.MethodGet, versionPath("skills", name, version)+"/content", nil)
 	if err != nil {
 		return "", err
 	}
-	response, err := r.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return "", err
 	}

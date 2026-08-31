@@ -43,4 +43,5 @@ output "greeting_skill_id" {
 
 - `description` (String) Description recorded for this skill version.
 - `id` (String) Identifier of the skill version.
+- `instructions` (String) Instructions recorded for this skill version. The service stores these as a `SKILL.md` document and generates its frontmatter from the skill name and description, so the frontmatter is stripped and only the body is returned.
 - `skill_id` (String) Service-assigned identifier of the parent skill.

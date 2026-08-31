@@ -30,11 +30,12 @@ type skillDataSource struct {
 }
 
 type skillDataSourceModel struct {
-	Name        types.String `tfsdk:"name"`
-	Version     types.String `tfsdk:"version"`
-	ID          types.String `tfsdk:"id"`
-	SkillID     types.String `tfsdk:"skill_id"`
-	Description types.String `tfsdk:"description"`
+	Name         types.String `tfsdk:"name"`
+	Version      types.String `tfsdk:"version"`
+	ID           types.String `tfsdk:"id"`
+	SkillID      types.String `tfsdk:"skill_id"`
+	Description  types.String `tfsdk:"description"`
+	Instructions types.String `tfsdk:"instructions"`
 }
 
 func (d *skillDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -65,6 +66,10 @@ func (d *skillDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"description": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Description recorded for this skill version.",
+			},
+			"instructions": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Instructions recorded for this skill version. The service stores these as a `SKILL.md` document and generates its frontmatter from the skill name and description, so the frontmatter is stripped and only the body is returned.",
 			},
 		},
 	}
@@ -109,5 +114,13 @@ func (d *skillDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	config.ID = types.StringValue(version.ID)
 	config.SkillID = types.StringValue(version.SkillID)
 	config.Description = optionalString(version.Description)
+
+	instructions, err := readSkillInstructions(previewCtx, d.client, config.Name.ValueString(), config.Version.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read skill instructions", err.Error())
+		return
+	}
+	config.Instructions = optionalString(instructions)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
