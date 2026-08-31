@@ -407,8 +407,9 @@ func decodeDefinition(version agentVersion, target supportedAgentDefinition, dia
 	return true
 }
 
-// decodeManagedDefinition rejects fields a resource would discard when it
-// publishes the next immutable agent version.
+// decodeManagedDefinition rejects version metadata a resource would discard
+// when publishing. Foundry-managed blueprint identity is preserved by the
+// service when the request omits it.
 func decodeManagedDefinition(version agentVersion, target supportedAgentDefinition, diagnostics *diag.Diagnostics) bool {
 	if !decodeDefinition(version, target, diagnostics) {
 		return false
@@ -420,12 +421,6 @@ func decodeManagedDefinition(version agentVersion, target supportedAgentDefiniti
 	var fields []string
 	if len(version.Metadata) > 0 {
 		fields = append(fields, "metadata")
-	}
-	if hasJSONValue(version.Blueprint) {
-		fields = append(fields, "blueprint")
-	}
-	if hasJSONValue(version.BlueprintReference) {
-		fields = append(fields, "blueprint_reference")
 	}
 	if len(fields) > 0 {
 		diagnostics.AddError(

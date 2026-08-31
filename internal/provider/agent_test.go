@@ -341,32 +341,20 @@ func TestManagedAgentDefinitionRejectsUnsupportedFieldsAndKindMismatch(t *testin
 	}
 }
 
-func TestManagedAgentDefinitionRejectsUnsupportedVersionFields(t *testing.T) {
+func TestManagedAgentDefinitionRejectsMetadata(t *testing.T) {
 	t.Parallel()
 
-	tests := []agentVersion{
-		{
-			Metadata:   map[string]string{"owner": "platform"},
-			Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1"}`),
-		},
-		{
-			BlueprintReference: json.RawMessage(`{"name":"blueprint"}`),
-			Definition:         json.RawMessage(`{"kind":"prompt","model":"gpt-4.1"}`),
-		},
-		{
-			Blueprint:  json.RawMessage(`{"principal_id":"principal"}`),
-			Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1"}`),
-		},
+	version := agentVersion{
+		Metadata:   map[string]string{"owner": "platform"},
+		Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1"}`),
 	}
-	for _, version := range tests {
-		var diagnostics diag.Diagnostics
-		if decodeManagedDefinition(version, &promptAgentDefinition{}, &diagnostics) || !diagnostics.HasError() {
-			t.Errorf("unsupported version fields were accepted: %+v", version)
-		}
+	var diagnostics diag.Diagnostics
+	if decodeManagedDefinition(version, &promptAgentDefinition{}, &diagnostics) || !diagnostics.HasError() {
+		t.Errorf("version metadata was accepted: %+v", version)
 	}
 }
 
-func TestAgentResponsePreservesTopLevelBlueprintFields(t *testing.T) {
+func TestManagedDefinitionAcceptsServiceBlueprintFields(t *testing.T) {
 	t.Parallel()
 
 	response := agentResponse{
@@ -377,8 +365,8 @@ func TestAgentResponsePreservesTopLevelBlueprintFields(t *testing.T) {
 
 	version := response.latestVersion()
 	var diagnostics diag.Diagnostics
-	if decodeManagedDefinition(version, &promptAgentDefinition{}, &diagnostics) || !diagnostics.HasError() {
-		t.Errorf("top-level blueprint fields were not rejected: %v", diagnostics)
+	if !decodeManagedDefinition(version, &promptAgentDefinition{}, &diagnostics) || diagnostics.HasError() {
+		t.Errorf("service-managed blueprint fields were rejected: %v", diagnostics)
 	}
 }
 

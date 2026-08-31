@@ -334,7 +334,6 @@ func (r *memoryStoreResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"updated_at": schema.Int64Attribute{
 				Computed:            true,
 				MarkdownDescription: "Unix timestamp when the memory store was last updated.",
-				PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 		},
 	}
