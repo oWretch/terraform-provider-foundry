@@ -69,7 +69,9 @@ func (r *fileResource) Metadata(_ context.Context, req resource.MetadataRequest,
 func (r *fileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	requiresReplace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Uploads a file for use by other Foundry resources. Files are immutable, so any change forces a new file to be uploaded.",
+		MarkdownDescription: "Uploads a file for use by other Foundry resources. Files are immutable, so any change forces a new file to be uploaded.\n\n" +
+			"Use this resource when the file is part of what Terraform manages, such as a document attached to a vector store an agent then searches. If the file is instead loaded once, or published by a separate data pipeline, upload it there and use the `foundry_files` data source to look up its ID: files are identified by a service-assigned ID rather than by name, so a lookup is the only way to reference a file this configuration did not create.\n\n" +
+			"The file contents are read and uploaded during `terraform apply`, so apply time grows with file size.",
 		Attributes: map[string]schema.Attribute{
 			"source_path": schema.StringAttribute{
 				Optional:            true,

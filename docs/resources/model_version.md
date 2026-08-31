@@ -6,6 +6,8 @@ description: |-
   Registers a custom model artifact as a project model asset, so that it can be deployed or referenced by other Foundry resources.
   The artifact is uploaded from a local path into storage the service issues for the version. Referencing an existing blob in your own storage account is not supported by the service: the model registry only resolves artifacts held in storage it manages. Use foundry_dataset when you need to reference your own storage instead.
   Only description and tags can be changed in place. Changing the artifact or any of its metadata publishes a new version.
+  ~> Consider whether Terraform is the right tool for publishing the artifact. A model artifact is a build output. It is produced by a training or fine-tuning pipeline, is identified by its contents, and is promoted rather than converged. Terraform's model is to make reality match a declaration, which fits deployment configuration better than it fits shipping a large binary. Publishing from the pipeline that produced the artifact, and using the foundry_model_version data source to reference the published version from Terraform, keeps the upload out of terraform apply.
+  That said, this resource is a reasonable way to publish a model from a CI or CD job when you would rather keep one tool in the pipeline, particularly for small artifacts and for environments rebuilt from scratch. Be aware that the whole artifact is uploaded during terraform apply, so apply time grows with artifact size, and that a change to the artifact replaces the version rather than updating it.
 ---
 
 # foundry_model_version (Resource)
@@ -15,6 +17,10 @@ Registers a custom model artifact as a project model asset, so that it can be de
 The artifact is uploaded from a local path into storage the service issues for the version. Referencing an existing blob in your own storage account is not supported by the service: the model registry only resolves artifacts held in storage it manages. Use `foundry_dataset` when you need to reference your own storage instead.
 
 Only `description` and `tags` can be changed in place. Changing the artifact or any of its metadata publishes a new version.
+
+~> **Consider whether Terraform is the right tool for publishing the artifact.** A model artifact is a build output. It is produced by a training or fine-tuning pipeline, is identified by its contents, and is promoted rather than converged. Terraform's model is to make reality match a declaration, which fits deployment configuration better than it fits shipping a large binary. Publishing from the pipeline that produced the artifact, and using the `foundry_model_version` data source to reference the published version from Terraform, keeps the upload out of `terraform apply`.
+
+That said, this resource is a reasonable way to publish a model from a CI or CD job when you would rather keep one tool in the pipeline, particularly for small artifacts and for environments rebuilt from scratch. Be aware that the whole artifact is uploaded during `terraform apply`, so apply time grows with artifact size, and that a change to the artifact replaces the version rather than updating it.
 
 ## Example Usage
 

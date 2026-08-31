@@ -47,6 +47,9 @@ This file records user-visible changes to the provider.
 - `foundry_model_version` resource for uploading a custom model artifact and registering it as a model version, including `LoRA` adapters. The artifact is uploaded to service-managed storage through the pending-upload handshake, because the model registry only issues a container SAS for storage it manages and rejects a practitioner's own blob URI.
 - `foundry_model_version` data source for looking up an existing model version by name and version.
 
+- `foundry_files` data source for listing uploaded files, optionally filtered by purpose. Files are identified by a service-assigned ID rather than by name, so a list is the only way to reference a file the configuration did not upload.
+- `foundry_vector_stores` data source for listing vector stores, optionally filtered by name. Vector store names are not unique, so the result is a list rather than a single store.
+
 ### Changed
 
 - The `foundry_toolbox` resource replaces the `tools_json` argument with repeatable typed `tools` blocks. A configuration using `tools_json` must be rewritten; each element of the previous JSON array becomes one `tools` block with the same keys as arguments. The `foundry_toolbox` data source keeps `tools_json` as a computed attribute.
