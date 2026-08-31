@@ -46,6 +46,7 @@ type fileModel struct {
 
 type fileResponse struct {
 	ID        string `json:"id"`
+	Purpose   string `json:"purpose"`
 	Filename  string `json:"filename"`
 	Bytes     int64  `json:"bytes"`
 	CreatedAt int64  `json:"created_at"`
@@ -54,6 +55,7 @@ type fileResponse struct {
 
 func (m *fileModel) apply(response fileResponse) {
 	m.ID = types.StringValue(response.ID)
+	m.Purpose = types.StringValue(response.Purpose)
 	m.Filename = types.StringValue(response.Filename)
 	m.Bytes = types.Int64Value(response.Bytes)
 	m.CreatedAt = types.Int64Value(response.CreatedAt)
@@ -70,13 +72,14 @@ func (r *fileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		MarkdownDescription: "Uploads a file for use by other Foundry resources. Files are immutable, so any change forces a new file to be uploaded.",
 		Attributes: map[string]schema.Attribute{
 			"source_path": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Local path of the file to upload.",
+				Optional:            true,
+				MarkdownDescription: "Local path of the file to upload. Required when uploading a file; it is optional only so that an imported file, whose local path the service cannot report, does not plan a replacement.",
 				PlanModifiers:       requiresReplace,
 			},
 			"purpose": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Intended purpose of the file, such as `assistants`, `batch`, `fine-tune`, `evals`, `vision`, or `user_data`. The accepted set varies by service version.",
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Intended purpose of the file, such as `assistants`, `batch`, `fine-tune`, `evals`, `vision`, or `user_data`. The accepted set varies by service version. Required when uploading a file; the service reports it back, so an imported file does not need it in the configuration.",
 				PlanModifiers:       requiresReplace,
 			},
 			"source_hash": schema.StringAttribute{
@@ -115,6 +118,24 @@ func (r *fileResource) Configure(_ context.Context, req resource.ConfigureReques
 func (r *fileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan fileModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if plan.SourcePath.IsNull() || plan.SourcePath.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("source_path"),
+			"Missing file contents",
+			"source_path is required when uploading a file. It is optional in the schema only so that importing an existing file, whose local path the service cannot report, does not plan a replacement.",
+		)
+	}
+	if plan.Purpose.IsNull() || plan.Purpose.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("purpose"),
+			"Missing file purpose",
+			"purpose is required when uploading a file. It is optional in the schema only because the service reports it back, so an imported file does not need it in the configuration.",
+		)
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}

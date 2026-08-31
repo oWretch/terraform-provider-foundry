@@ -53,6 +53,8 @@ This file records user-visible changes to the provider.
 
 ### Fixed
 
+- The `foundry_file` resource no longer plans a replacement after an import. `source_path` is now optional, because the service cannot report the local path an imported file came from, and `purpose` is now read back from the service instead of relying on the configuration. Uploading still requires both, and a create without them fails with an explanatory error.
+
 - Skill `instructions` are now recovered when reading a skill, so importing a skill no longer produces a plan that publishes an identical version.
 - Skill `description` is derived from an uploaded skill file when it is not configured, so `source_path` no longer fails with an inconsistent result after apply.
 - The `foundry_skill` data source now returns `instructions`, which it previously omitted even though the skill body is the point of looking one up.
