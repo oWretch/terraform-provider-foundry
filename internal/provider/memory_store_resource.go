@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -15,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/objectplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
@@ -61,6 +64,7 @@ type memoryStoreModel struct {
 	Options        types.Object `tfsdk:"options"`
 	ID             types.String `tfsdk:"id"`
 	CreatedAt      types.Int64  `tfsdk:"created_at"`
+	UpdatedAt      types.Int64  `tfsdk:"updated_at"`
 }
 
 var memoryStoreOptionsAttributeTypes = map[string]attr.Type{
@@ -94,16 +98,16 @@ type memoryStoreCreateRequest struct {
 }
 
 type memoryStoreUpdateRequest struct {
-	Description string            `json:"description,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	Description string            `json:"description"`
+	Metadata    map[string]string `json:"metadata"`
 }
 
 type memoryStoreDefaultOptionsResponse struct {
-	UserProfileEnabled      bool   `json:"user_profile_enabled"`
+	UserProfileEnabled      *bool  `json:"user_profile_enabled"`
 	UserProfileDetails      string `json:"user_profile_details"`
-	ChatSummaryEnabled      bool   `json:"chat_summary_enabled"`
-	ProceduralMemoryEnabled bool   `json:"procedural_memory_enabled"`
-	DefaultTTLSeconds       int64  `json:"default_ttl_seconds"`
+	ChatSummaryEnabled      *bool  `json:"chat_summary_enabled"`
+	ProceduralMemoryEnabled *bool  `json:"procedural_memory_enabled"`
+	DefaultTTLSeconds       *int64 `json:"default_ttl_seconds"`
 }
 
 type memoryStoreDefinitionResponse struct {
@@ -114,11 +118,13 @@ type memoryStoreDefinitionResponse struct {
 }
 
 type memoryStoreResponse struct {
+	Object      string                        `json:"object"`
 	ID          string                        `json:"id"`
 	Name        string                        `json:"name"`
-	Description string                        `json:"description"`
-	Metadata    map[string]string             `json:"metadata"`
+	Description *string                       `json:"description"`
+	Metadata    *map[string]string            `json:"metadata"`
 	CreatedAt   int64                         `json:"created_at"`
+	UpdatedAt   int64                         `json:"updated_at"`
 	Definition  memoryStoreDefinitionResponse `json:"definition"`
 }
 
@@ -165,7 +171,10 @@ func (m memoryStoreModel) createRequest(ctx context.Context, diagnostics *diag.D
 }
 
 func (m memoryStoreModel) updateRequest(ctx context.Context, diagnostics *diag.Diagnostics) memoryStoreUpdateRequest {
-	request := memoryStoreUpdateRequest{Description: m.Description.ValueString()}
+	request := memoryStoreUpdateRequest{
+		Description: m.Description.ValueString(),
+		Metadata:    map[string]string{},
+	}
 	if !m.Metadata.IsNull() {
 		diagnostics.Append(m.Metadata.ElementsAs(ctx, &request.Metadata, false)...)
 	}
@@ -173,31 +182,59 @@ func (m memoryStoreModel) updateRequest(ctx context.Context, diagnostics *diag.D
 }
 
 func (m *memoryStoreModel) apply(ctx context.Context, response memoryStoreResponse, diagnostics *diag.Diagnostics) {
+	if response.Object != "memory_store" {
+		diagnostics.AddError("Unexpected memory store object", fmt.Sprintf("Foundry returned object %q; expected memory_store.", response.Object))
+		return
+	}
+	if response.Definition.Kind != "default" {
+		diagnostics.AddError("Unsupported memory store kind", fmt.Sprintf("Foundry returned memory store kind %q; foundry_memory_store only supports the default kind.", response.Definition.Kind))
+		return
+	}
+
 	m.ID = types.StringValue(response.ID)
 	m.Name = types.StringValue(response.Name)
-	m.Description = optionalString(response.Description)
+	if response.Description != nil {
+		m.Description = applyOptionalAssetString(m.Description, *response.Description)
+	}
 	m.CreatedAt = types.Int64Value(response.CreatedAt)
+	m.UpdatedAt = types.Int64Value(response.UpdatedAt)
 	m.ChatModel = types.StringValue(response.Definition.ChatModel)
 	m.EmbeddingModel = types.StringValue(response.Definition.EmbeddingModel)
 
-	if len(response.Metadata) == 0 {
-		m.Metadata = types.MapNull(types.StringType)
-	} else {
-		value, diags := types.MapValueFrom(ctx, types.StringType, response.Metadata)
-		diagnostics.Append(diags...)
-		m.Metadata = value
+	if response.Metadata != nil {
+		if len(*response.Metadata) != 0 || !m.Metadata.IsNull() {
+			value, diags := types.MapValueFrom(ctx, types.StringType, *response.Metadata)
+			diagnostics.Append(diags...)
+			m.Metadata = value
+		}
 	}
 
 	if response.Definition.Options == nil {
 		m.Options = types.ObjectNull(memoryStoreOptionsAttributeTypes)
 	} else {
 		options := response.Definition.Options
+		userProfileEnabled := true
+		if options.UserProfileEnabled != nil {
+			userProfileEnabled = *options.UserProfileEnabled
+		}
+		chatSummaryEnabled := true
+		if options.ChatSummaryEnabled != nil {
+			chatSummaryEnabled = *options.ChatSummaryEnabled
+		}
+		proceduralMemoryEnabled := true
+		if options.ProceduralMemoryEnabled != nil {
+			proceduralMemoryEnabled = *options.ProceduralMemoryEnabled
+		}
+		defaultTTLSeconds := int64(0)
+		if options.DefaultTTLSeconds != nil {
+			defaultTTLSeconds = *options.DefaultTTLSeconds
+		}
 		value, diags := types.ObjectValue(memoryStoreOptionsAttributeTypes, map[string]attr.Value{
-			"user_profile_enabled":      types.BoolValue(options.UserProfileEnabled),
+			"user_profile_enabled":      types.BoolValue(userProfileEnabled),
 			"user_profile_details":      optionalString(options.UserProfileDetails),
-			"chat_summary_enabled":      types.BoolValue(options.ChatSummaryEnabled),
-			"procedural_memory_enabled": types.BoolValue(options.ProceduralMemoryEnabled),
-			"default_ttl_seconds":       types.Int64Value(options.DefaultTTLSeconds),
+			"chat_summary_enabled":      types.BoolValue(chatSummaryEnabled),
+			"procedural_memory_enabled": types.BoolValue(proceduralMemoryEnabled),
+			"default_ttl_seconds":       types.Int64Value(defaultTTLSeconds),
 		})
 		diagnostics.Append(diags...)
 		m.Options = value
@@ -205,7 +242,7 @@ func (m *memoryStoreModel) apply(ctx context.Context, response memoryStoreRespon
 }
 
 func (m memoryStoreModel) path() string {
-	return "memory_stores/" + m.Name.ValueString()
+	return assetNamePath("memory_stores", m.Name.ValueString())
 }
 
 func (r *memoryStoreResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -262,6 +299,7 @@ func (r *memoryStoreResource) Schema(_ context.Context, _ resource.SchemaRequest
 					"user_profile_details": schema.StringAttribute{
 						Optional:            true,
 						MarkdownDescription: "Specific categories or types of user profile information to extract and store.",
+						Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 					},
 					"chat_summary_enabled": schema.BoolAttribute{
 						Optional:            true,
@@ -293,6 +331,11 @@ func (r *memoryStoreResource) Schema(_ context.Context, _ resource.SchemaRequest
 				MarkdownDescription: "Unix timestamp when the memory store was created.",
 				PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
+			"updated_at": schema.Int64Attribute{
+				Computed:            true,
+				MarkdownDescription: "Unix timestamp when the memory store was last updated.",
+				PlanModifiers:       []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+			},
 		},
 	}
 }
@@ -315,8 +358,12 @@ func (r *memoryStoreResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	request := plan.createRequest(ctx, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	var response memoryStoreResponse
-	if err := r.client.JSON(ctx, http.MethodPost, "memory_stores", plan.createRequest(ctx, &resp.Diagnostics), &response); err != nil {
+	if err := r.client.JSON(ctx, http.MethodPost, "memory_stores", request, &response); err != nil {
 		resp.Diagnostics.AddError("Unable to create memory store", err.Error())
 		return
 	}
@@ -366,8 +413,12 @@ func (r *memoryStoreResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	request := plan.updateRequest(ctx, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	var response memoryStoreResponse
-	if err := r.client.JSON(ctx, http.MethodPost, plan.path(), plan.updateRequest(ctx, &resp.Diagnostics), &response); err != nil {
+	if err := r.client.JSON(ctx, http.MethodPost, plan.path(), request, &response); err != nil {
 		resp.Diagnostics.AddError("Unable to update memory store", err.Error())
 		return
 	}

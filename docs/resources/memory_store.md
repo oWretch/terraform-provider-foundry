@@ -63,6 +63,7 @@ resource "foundry_memory_store" "agent_memory" {
 
 - `created_at` (Number) Unix timestamp when the memory store was created.
 - `id` (String) Service-assigned memory store identifier.
+- `updated_at` (Number) Unix timestamp when the memory store was last updated.
 
 <a id="nestedatt--options"></a>
 ### Nested Schema for `options`

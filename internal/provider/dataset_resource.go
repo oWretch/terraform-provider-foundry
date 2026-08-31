@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -42,15 +41,9 @@ type datasetModel struct {
 	Description    types.String `tfsdk:"description"`
 	Tags           types.Map    `tfsdk:"tags"`
 	ID             types.String `tfsdk:"id"`
-	DisplayName    types.String `tfsdk:"display_name"`
-	IsSingleFile   types.Bool   `tfsdk:"is_single_file"`
-	CreatedAt      types.String `tfsdk:"created_at"`
-	LastModifiedAt types.String `tfsdk:"last_modified_at"`
+	IsReference    types.Bool   `tfsdk:"is_reference"`
 }
 
-// ConnectionName is required by the service but is undocumented in the public
-// API reference; omitting it returns an opaque "Invalid request when
-// registering the data asset..." error with no field-level detail.
 type datasetRequest struct {
 	Type           string            `json:"type"`
 	ConnectionName string            `json:"connectionName"`
@@ -59,21 +52,22 @@ type datasetRequest struct {
 	Tags           map[string]string `json:"tags,omitempty"`
 }
 
+type datasetUpdateRequest struct {
+	Type        string            `json:"type"`
+	Description *string           `json:"description"`
+	Tags        map[string]string `json:"tags"`
+}
+
 type datasetResponse struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
-	DisplayName    string            `json:"displayName"`
-	Description    string            `json:"description"`
-	Tags           map[string]string `json:"tags"`
-	Type           string            `json:"type"`
-	DataURI        string            `json:"dataUri"`
-	IsSingleFile   bool              `json:"isSingleFile"`
-	ConnectionName string            `json:"connectionName"`
-	SystemData     struct {
-		CreatedAt      string `json:"createdAt"`
-		LastModifiedAt string `json:"lastModifiedAt"`
-	} `json:"systemData"`
+	ID             string             `json:"id"`
+	Name           string             `json:"name"`
+	Version        string             `json:"version"`
+	Description    *string            `json:"description"`
+	Tags           *map[string]string `json:"tags"`
+	Type           string             `json:"type"`
+	DataURI        string             `json:"dataUri"`
+	IsReference    *bool              `json:"isReference"`
+	ConnectionName *string            `json:"connectionName"`
 }
 
 func (m datasetModel) request(ctx context.Context, diagnostics *diag.Diagnostics) datasetRequest {
@@ -89,30 +83,55 @@ func (m datasetModel) request(ctx context.Context, diagnostics *diag.Diagnostics
 	return request
 }
 
+func (m datasetModel) updateRequest(ctx context.Context, diagnostics *diag.Diagnostics) datasetUpdateRequest {
+	request := datasetUpdateRequest{Type: m.Type.ValueString()}
+	if !m.Description.IsNull() {
+		value := m.Description.ValueString()
+		request.Description = &value
+	}
+	if !m.Tags.IsNull() {
+		diagnostics.Append(m.Tags.ElementsAs(ctx, &request.Tags, false)...)
+	}
+	return request
+}
+
 func (m *datasetModel) apply(ctx context.Context, response datasetResponse, diagnostics *diag.Diagnostics) {
-	m.ID = types.StringValue(response.ID)
+	if response.Type != "uri_file" && response.Type != "uri_folder" {
+		diagnostics.AddError("Unsupported dataset type", fmt.Sprintf("Foundry returned dataset type %q; foundry_dataset supports uri_file and uri_folder.", response.Type))
+		return
+	}
+
+	if response.ID == "" {
+		m.ID = types.StringValue(response.Name + ":" + response.Version)
+	} else {
+		m.ID = types.StringValue(response.ID)
+	}
 	m.Name = types.StringValue(response.Name)
 	m.Version = types.StringValue(response.Version)
 	m.Type = types.StringValue(response.Type)
-	m.ConnectionName = types.StringValue(response.ConnectionName)
 	m.DataURI = types.StringValue(response.DataURI)
-	m.Description = optionalString(response.Description)
-	m.DisplayName = types.StringValue(response.DisplayName)
-	m.IsSingleFile = types.BoolValue(response.IsSingleFile)
-	m.CreatedAt = types.StringValue(response.SystemData.CreatedAt)
-	m.LastModifiedAt = types.StringValue(response.SystemData.LastModifiedAt)
-
-	if len(response.Tags) == 0 {
-		m.Tags = types.MapNull(types.StringType)
+	if response.Description != nil {
+		m.Description = applyOptionalAssetString(m.Description, *response.Description)
+	}
+	if response.Tags != nil {
+		if len(*response.Tags) != 0 || !m.Tags.IsNull() {
+			value, diags := types.MapValueFrom(ctx, types.StringType, *response.Tags)
+			diagnostics.Append(diags...)
+			m.Tags = value
+		}
+	}
+	if response.ConnectionName != nil {
+		m.ConnectionName = optionalString(*response.ConnectionName)
+	}
+	if response.IsReference == nil {
+		m.IsReference = types.BoolNull()
 	} else {
-		value, diags := types.MapValueFrom(ctx, types.StringType, response.Tags)
-		diagnostics.Append(diags...)
-		m.Tags = value
+		m.IsReference = types.BoolValue(*response.IsReference)
 	}
 }
 
 func (m datasetModel) path() string {
-	return fmt.Sprintf("datasets/%s/versions/%s", m.Name.ValueString(), m.Version.ValueString())
+	return assetVersionPath("datasets", m.Name.ValueString(), m.Version.ValueString())
 }
 
 func (r *datasetResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -141,11 +160,13 @@ func (r *datasetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"connection_name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Name of the Azure Storage connection backing the dataset.",
+				MarkdownDescription: "Name of the Azure Storage connection backing the dataset. This resource registers an existing URI rather than using the pending-upload flow. Changing this forces a new dataset version.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"data_uri": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Blob URI of the file or folder referenced by the dataset.",
+				MarkdownDescription: "Blob URI of the file or folder referenced by the dataset. Changing this forces a new dataset version.",
+				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"description": schema.StringAttribute{
 				Optional:            true,
@@ -161,21 +182,9 @@ func (r *datasetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				MarkdownDescription: "Service-assigned dataset asset identifier.",
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
-			"display_name": schema.StringAttribute{
+			"is_reference": schema.BoolAttribute{
 				Computed:            true,
-				MarkdownDescription: "Display name assigned to the dataset version.",
-			},
-			"is_single_file": schema.BoolAttribute{
-				Computed:            true,
-				MarkdownDescription: "Whether the dataset references a single file.",
-			},
-			"created_at": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "RFC 3339 timestamp when the dataset version was created.",
-			},
-			"last_modified_at": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "RFC 3339 timestamp when the dataset version was last modified.",
+				MarkdownDescription: "Whether the dataset references external storage instead of service-managed storage.",
 			},
 		},
 	}
@@ -193,7 +202,11 @@ func (r *datasetResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	var response datasetResponse
-	if err := r.client.JSONWithContentType(ctx, http.MethodPatch, plan.path(), "application/merge-patch+json", plan.request(ctx, &resp.Diagnostics), &response); err != nil {
+	request := plan.request(ctx, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.JSONWithContentType(ctx, http.MethodPatch, plan.path(), "application/merge-patch+json", request, &response); err != nil {
 		resp.Diagnostics.AddError("Unable to create dataset", err.Error())
 		return
 	}
@@ -232,7 +245,11 @@ func (r *datasetResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	var response datasetResponse
-	if err := r.client.JSONWithContentType(ctx, http.MethodPatch, plan.path(), "application/merge-patch+json", plan.request(ctx, &resp.Diagnostics), &response); err != nil {
+	request := plan.updateRequest(ctx, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := r.client.JSONWithContentType(ctx, http.MethodPatch, plan.path(), "application/merge-patch+json", request, &response); err != nil {
 		resp.Diagnostics.AddError("Unable to update dataset", err.Error())
 		return
 	}
@@ -261,13 +278,4 @@ func (r *datasetResource) ImportState(ctx context.Context, req resource.ImportSt
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version"), version)...)
-}
-
-// splitNameVersion parses a compound name/version import ID into its parts.
-func splitNameVersion(id string) (string, string, error) {
-	name, version, found := strings.Cut(id, "/")
-	if !found || name == "" || version == "" {
-		return "", "", fmt.Errorf("expected import ID in the form name/version, got %q", id)
-	}
-	return name, version, nil
 }

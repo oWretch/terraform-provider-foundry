@@ -18,9 +18,12 @@ This file records user-visible changes to the provider.
 - `foundry_vector_store_file` resource for attaching a file to a vector store.
 - `foundry_dataset` resource for registering a blob file or folder as a dataset version.
 - `foundry_index` resource for managing an Azure AI Search-backed index version.
+- `foundry_dataset` data source for looking up a dataset by name and optional version. Omitting `version` resolves the service's current latest version.
+- `foundry_index` data source for looking up an Azure AI Search-backed index by name and optional version. Omitting `version` resolves the service's current latest version.
 - `foundry_deployments` data source listing the model deployments available to the project.
 - `foundry_connections` data source listing the connections configured on the account and project, for referencing an existing connection by name.
 - `foundry_memory_store` resource (preview) for managing a memory store that extracts and stores user profile, chat summary, and procedural memories from agent conversations. Requires `enable_preview = ["memory_stores"]` on the provider.
+- `foundry_memory_store` data source (preview) for looking up the current memory store object by name. Requires `enable_preview = ["memory_stores"]` on the provider.
 - `foundry_routine` resource (preview) for managing a named automation rule that triggers an agent on a schedule or at a specific time. Requires `enable_preview = ["routines"]` on the provider.
 - `foundry_routine` data source (preview) for looking up an existing routine by name. Requires `enable_preview = ["routines"]` on the provider.
 - `foundry_schedule` resource (preview) for managing a schedule that runs an evaluation or insight task on a cron, recurrence, or one-time trigger. Requires `enable_preview = ["schedules"]` on the provider.
@@ -54,6 +57,7 @@ This file records user-visible changes to the provider.
 ### Changed
 
 - Agent resources now use the current v1 API definitions. Hosted agents use `container_configuration` and `protocol_versions`, external agents use `otel_agent_id`, and resources reject imported definitions or version metadata that an update would discard.
+- Dataset, index, and memory-store resources now use the current v1 wire fields. Create-only dataset and Azure Search fields force replacement, index field mappings are preserved, unsupported index and memory-store kinds are rejected, and mutable metadata can be cleared.
 - The `foundry_toolbox` resource replaces the `tools_json` argument with repeatable typed `tools` blocks. A configuration using `tools_json` must be rewritten; each element of the previous JSON array becomes one `tools` block with the same keys as arguments. The `foundry_toolbox` data source keeps `tools_json` as a computed attribute.
 
 ### Fixed

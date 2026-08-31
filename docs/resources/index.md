@@ -26,18 +26,36 @@ resource "foundry_index" "search" {
 
 ### Required
 
-- `connection_name` (String) Name of the Azure AI Search connection backing the index.
-- `index_name` (String) Name of the underlying Azure AI Search index.
 - `name` (String) Name of the index. Changing this forces a new index to be created.
 - `version` (String) Caller-supplied version identifier for the index. Changing this forces a new index version to be created.
 
 ### Optional
 
+- `connection_name` (String) Name of the Azure AI Search connection backing the index. Required when creating a version; optional only so an imported version can remain managed when the service omits this create-only field. Changing this forces a new index version.
+- `description` (String) Description of the index version.
+- `field_mapping` (Attributes) Field mapping used by the Azure AI Search index. Changing this forces a new index version. (see [below for nested schema](#nestedatt--field_mapping))
+- `index_name` (String) Name of the underlying Azure AI Search index. Required when creating a version; optional only so an imported version can remain managed when the service omits this create-only field. Changing this forces a new index version.
+- `tags` (Map of String) Key-value tags attached to the index version.
 - `type` (String) Index type. Defaults to `AzureSearch` for a connection-backed Azure AI Search index.
 
 ### Read-Only
 
-- `id` (String) Identifier of the index version, in `name:version` form.
+- `id` (String) Service-assigned index asset identifier, or `name:version` when the service omits one.
+
+<a id="nestedatt--field_mapping"></a>
+### Nested Schema for `field_mapping`
+
+Required:
+
+- `content_fields` (List of String) Fields containing text content.
+
+Optional:
+
+- `filepath_field` (String) Field containing the source file path.
+- `metadata_fields` (List of String) Fields containing metadata.
+- `title_field` (String) Field containing the document title.
+- `url_field` (String) Field containing the document URL.
+- `vector_fields` (List of String) Fields containing vector content.
 
 ## Import
 
@@ -46,6 +64,6 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Indexes are imported using the compound name/version identifier.
+# Indexes are imported using URL-escaped name/version values when either contains "/".
 terraform import foundry_index.search product-index/1
 ```

@@ -31,8 +31,8 @@ resource "foundry_dataset" "knowledge" {
 
 ### Required
 
-- `connection_name` (String) Name of the Azure Storage connection backing the dataset.
-- `data_uri` (String) Blob URI of the file or folder referenced by the dataset.
+- `connection_name` (String) Name of the Azure Storage connection backing the dataset. This resource registers an existing URI rather than using the pending-upload flow. Changing this forces a new dataset version.
+- `data_uri` (String) Blob URI of the file or folder referenced by the dataset. Changing this forces a new dataset version.
 - `name` (String) Name of the dataset. Changing this forces a new dataset to be created.
 - `type` (String) Dataset type. `uri_file` references a single blob file; `uri_folder` references a folder or prefix. Changing this forces a new dataset version to be created.
 - `version` (String) Caller-supplied version identifier for the dataset. Changing this forces a new dataset version to be created.
@@ -44,11 +44,8 @@ resource "foundry_dataset" "knowledge" {
 
 ### Read-Only
 
-- `created_at` (String) RFC 3339 timestamp when the dataset version was created.
-- `display_name` (String) Display name assigned to the dataset version.
 - `id` (String) Service-assigned dataset asset identifier.
-- `is_single_file` (Boolean) Whether the dataset references a single file.
-- `last_modified_at` (String) RFC 3339 timestamp when the dataset version was last modified.
+- `is_reference` (Boolean) Whether the dataset references external storage instead of service-managed storage.
 
 ## Import
 
@@ -57,6 +54,6 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Datasets are imported using the compound name/version identifier.
+# Datasets are imported using URL-escaped name/version values when either contains "/".
 terraform import foundry_dataset.knowledge product-knowledge/1
 ```
