@@ -152,6 +152,8 @@ func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataS
 	return []func() datasource.DataSource{
 		NewDeploymentsDataSource,
 		NewConnectionsDataSource,
+		NewFilesDataSource,
+		NewVectorStoresDataSource,
 		NewRoutineDataSource,
 		NewScheduleDataSource,
 		NewConnectionDataSource,
