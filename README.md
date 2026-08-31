@@ -43,7 +43,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 - `foundry_routine`, `foundry_schedule` — read an existing routine or schedule (`routines`, `schedules`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
-The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.25 or later.
+The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.25.13 or later.
 
 ## Development
 

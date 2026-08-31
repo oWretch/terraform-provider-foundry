@@ -2,7 +2,7 @@
 
 ## Development setup
 
-Install Go 1.25 or later, Terraform 1.11 or later, and optionally OpenTofu 1.11 or later.
+Install Go 1.25.13 or later, Terraform 1.11 or later, and optionally OpenTofu 1.11 or later.
 
 ```shell
 go mod download

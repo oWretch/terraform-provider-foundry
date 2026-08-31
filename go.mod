@@ -1,6 +1,6 @@
 module github.com/oWretch/terraform-provider-foundry
 
-go 1.25.0
+go 1.25.13
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
