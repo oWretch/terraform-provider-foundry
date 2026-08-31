@@ -18,6 +18,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.11.0
+          terraform_wrapper: false
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - uses: golangci/golangci-lint-action@db9de0fc1a667e1a49d2291a1a042dff081d78f6 # v9
@@ -27,6 +31,16 @@ jobs:
       - run: go build ./...
       - run: go tool tfplugindocs generate --provider-name foundry
       - run: git diff --exit-code -- docs
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1
+        with:
+          go-version-input: ""
+          go-version-file: go.mod
+          check-latest: false
 
   terraform:
     strategy:

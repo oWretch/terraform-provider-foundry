@@ -3,7 +3,7 @@ terraform {
 
   required_providers {
     foundry = {
-      source = "oWretch/foundry"
+      source = "registry.terraform.io/oWretch/foundry"
     }
   }
 }

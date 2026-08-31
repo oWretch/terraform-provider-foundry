@@ -1,0 +1,68 @@
+name: Azure acceptance
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "43 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundry-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: foundry-ci
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+      ARM_USE_CLI: "true"
+      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
+      FOUNDRY_ENVIRONMENT: public
+      FOUNDRY_PROJECT_NAME: ${{ vars.FOUNDRY_PROJECT_NAME }}
+      FOUNDRY_TEST_CHAT_MODEL_NAME: ${{ vars.FOUNDRY_TEST_CHAT_MODEL_NAME }}
+      FOUNDRY_TEST_DATA_URI: ${{ vars.FOUNDRY_TEST_DATA_URI }}
+      FOUNDRY_TEST_EMBEDDING_MODEL_NAME: ${{ vars.FOUNDRY_TEST_EMBEDDING_MODEL_NAME }}
+      FOUNDRY_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      FOUNDRY_TEST_SEARCH_CONNECTION_NAME: ${{ vars.FOUNDRY_TEST_SEARCH_CONNECTION_NAME }}
+      FOUNDRY_TEST_SEARCH_INDEX_NAME: ${{ vars.FOUNDRY_TEST_SEARCH_INDEX_NAME }}
+      FOUNDRY_TEST_STORAGE_CONNECTION_NAME: ${{ vars.FOUNDRY_TEST_STORAGE_CONNECTION_NAME }}
+      TF_ACC: "1"
+    steps:
+      - name: Check environment configuration
+        run: |
+          : "${ARM_CLIENT_ID:?configure ARM_CLIENT_ID in foundry-ci}"
+          : "${ARM_SUBSCRIPTION_ID:?configure ARM_SUBSCRIPTION_ID in foundry-ci}"
+          : "${ARM_TENANT_ID:?configure ARM_TENANT_ID in foundry-ci}"
+          : "${FOUNDRY_ACCOUNT_NAME:?configure FOUNDRY_ACCOUNT_NAME in foundry-ci}"
+          : "${FOUNDRY_PROJECT_NAME:?configure FOUNDRY_PROJECT_NAME in foundry-ci}"
+          : "${FOUNDRY_TEST_CHAT_MODEL_NAME:?configure FOUNDRY_TEST_CHAT_MODEL_NAME in foundry-ci}"
+          : "${FOUNDRY_TEST_EMBEDDING_MODEL_NAME:?configure FOUNDRY_TEST_EMBEDDING_MODEL_NAME in foundry-ci}"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.11.0
+          terraform_wrapper: false
+      - uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          environment: azurecloud
+      - run: ./scripts/acceptance-test.sh

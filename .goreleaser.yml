@@ -1,12 +1,15 @@
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
 
 builds:
   - env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    mod_timestamp: "{{ .CommitTimestamp }}"
     goos:
       - darwin
       - freebsd
@@ -22,7 +25,7 @@ builds:
         goarch: "386"
     binary: "{{ .ProjectName }}_v{{ .Version }}"
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - -s -w -buildid= -X main.version={{ .Version }}
 
 archives:
   - formats:
@@ -32,6 +35,9 @@ archives:
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
+  extra_files:
+    - glob: ./terraform-registry-manifest.json
+      name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
 
 signs:
   - artifacts: checksum
@@ -45,7 +51,11 @@ signs:
       - ${artifact}
 
 release:
-  draft: true
+  draft: false
+  prerelease: auto
+  extra_files:
+    - glob: ./terraform-registry-manifest.json
+      name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
 
 changelog:
   use: git

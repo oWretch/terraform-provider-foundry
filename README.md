@@ -43,7 +43,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 - `foundry_routine`, `foundry_schedule` — read an existing routine or schedule (`routines`, `schedules`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
-The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.24 or later.
+The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.25 or later.
 
 ## Development
 
@@ -75,7 +75,7 @@ Create a Terraform CLI configuration outside the repository and replace `/absolu
 ```hcl
 provider_installation {
   dev_overrides {
-    "oWretch/foundry" = "/absolute/path/to/terraform-provider-foundry"
+    "registry.terraform.io/oWretch/foundry" = "/absolute/path/to/terraform-provider-foundry"
   }
 
   direct {}
@@ -154,7 +154,7 @@ The provider targets the current Foundry project API. It does not support the de
 
 ## Releases
 
-Release automation is present but creates draft releases. Publishing requires repository signing secrets and Terraform Registry registration.
+Pushing a semantic version tag such as `v0.1.0` automatically publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance. The protected `release` environment must provide the `GPG_PRIVATE_KEY` and `GPG_FINGERPRINT` secrets. Terraform Registry registration remains a separate repository-owner step.
 
 ## License
 

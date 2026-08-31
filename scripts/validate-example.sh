@@ -5,9 +5,17 @@ cli=${1:?usage: validate-example.sh terraform|tofu}
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 platform="$(go env GOOS)_$(go env GOARCH)"
 mirror="$root/.tmp/provider-mirror"
-install_dir="$mirror/registry.terraform.io/owretch/foundry/0.1.0/$platform"
 config="$root/.tmp/$cli.rc"
 example="$root/examples/provider"
+
+case "$cli" in
+terraform | tofu) ;;
+*) echo "usage: validate-example.sh terraform|tofu" >&2; exit 2 ;;
+esac
+
+registry=registry.terraform.io
+source="$registry/oWretch/foundry"
+install_dir="$mirror/$registry/owretch/foundry/0.1.0/$platform"
 
 cleanup() {
 	rm -rf "$example/.terraform"
@@ -23,10 +31,10 @@ cat >"$config" <<EOF
 provider_installation {
   filesystem_mirror {
     path    = "$mirror"
-    include = ["registry.terraform.io/oWretch/foundry"]
+    include = ["$source"]
   }
   direct {
-    exclude = ["registry.terraform.io/oWretch/foundry"]
+    exclude = ["$source"]
   }
 }
 EOF
