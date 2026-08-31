@@ -396,6 +396,10 @@ type retryTransport struct {
 }
 
 func (t *retryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if !retryableMethod(request.Method) {
+		return t.base.RoundTrip(request)
+	}
+
 	for attempt := 0; ; attempt++ {
 		current := request.Clone(request.Context())
 		current.Header = request.Header.Clone()
@@ -424,6 +428,15 @@ func (t *retryTransport) RoundTrip(request *http.Request) (*http.Response, error
 		if err := waitForRetry(request.Context(), retryDelay(response, attempt)); err != nil {
 			return nil, err
 		}
+	}
+}
+
+func retryableMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodTrace:
+		return true
+	default:
+		return false
 	}
 }
 

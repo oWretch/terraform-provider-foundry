@@ -19,7 +19,7 @@ Keep the client concrete. Add narrow interfaces beside a consuming resource only
 
 ## Commands
 
-Use Go 1.24 or later.
+Use Go 1.25 or later.
 
 ```shell
 go mod download
@@ -40,7 +40,7 @@ go test ./internal/clients -run TestClientRequestAndRetry
 
 ## Implementation rules
 
-- Support Go 1.24, Terraform 1.11, and OpenTofu 1.11 as the minimum versions.
+- Support Go 1.25, Terraform 1.11, and OpenTofu 1.11 as the minimum versions.
 - Keep `providerserver.Serve` on protocol 6.
 - Provider arguments override environment variables, including explicit false and empty values.
 - Reject unknown configuration values, incomplete credentials, and multiple authentication modes with clear diagnostics.

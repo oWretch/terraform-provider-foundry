@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -76,6 +77,98 @@ func TestClientRequestAndRetry(t *testing.T) {
 	}
 	if requestID == "" {
 		t.Error("x-ms-client-request-id was not set")
+	}
+}
+
+func TestRetryTransportMethods(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		method   string
+		attempts int
+	}{
+		{method: http.MethodGet, attempts: 2},
+		{method: http.MethodHead, attempts: 2},
+		{method: http.MethodOptions, attempts: 2},
+		{method: http.MethodPut, attempts: 2},
+		{method: http.MethodPatch, attempts: 2},
+		{method: http.MethodDelete, attempts: 2},
+		{method: http.MethodTrace, attempts: 2},
+		{method: http.MethodPost, attempts: 1},
+	}
+
+	for _, test := range tests {
+		t.Run(test.method, func(t *testing.T) {
+			t.Parallel()
+
+			var attempts int
+			transport := retryTransport{
+				maxRetries: 1,
+				base: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+					attempts++
+					status := http.StatusServiceUnavailable
+					if attempts > 1 {
+						status = http.StatusOK
+					}
+					return &http.Response{
+						StatusCode: status,
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader("{}")),
+						Request:    request,
+					}, nil
+				}),
+			}
+
+			request, err := http.NewRequestWithContext(context.Background(), test.method, "https://example.test", nil)
+			if err != nil {
+				t.Fatalf("NewRequestWithContext() error = %v", err)
+			}
+			response, err := transport.RoundTrip(request)
+			if err != nil {
+				t.Fatalf("RoundTrip() error = %v", err)
+			}
+			if err := response.Body.Close(); err != nil {
+				t.Fatalf("close response body: %v", err)
+			}
+			if attempts != test.attempts {
+				t.Errorf("attempts = %d, want %d", attempts, test.attempts)
+			}
+		})
+	}
+}
+
+func TestRetryTransportContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var attempts int
+	transport := retryTransport{
+		maxRetries: 3,
+		base: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			attempts++
+			cancel()
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     http.Header{"Retry-After": []string{"60"}},
+				Body:       io.NopCloser(strings.NewReader("{}")),
+				Request:    request,
+			}, nil
+		}),
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.test", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	response, err := transport.RoundTrip(request)
+	if response != nil {
+		t.Fatal("RoundTrip() response was not nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RoundTrip() error = %v, want %v", err, context.Canceled)
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1", attempts)
 	}
 }
 
