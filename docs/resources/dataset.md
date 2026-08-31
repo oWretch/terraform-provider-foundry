@@ -31,7 +31,6 @@ resource "foundry_dataset" "knowledge" {
 
 ### Required
 
-- `connection_name` (String) Name of the Azure Storage connection backing the dataset. This resource registers an existing URI rather than using the pending-upload flow. Changing this forces a new dataset version.
 - `data_uri` (String) Blob URI of the file or folder referenced by the dataset. Changing this forces a new dataset version.
 - `name` (String) Name of the dataset. Changing this forces a new dataset to be created.
 - `type` (String) Dataset type. `uri_file` references a single blob file; `uri_folder` references a folder or prefix. Changing this forces a new dataset version to be created.
@@ -39,6 +38,7 @@ resource "foundry_dataset" "knowledge" {
 
 ### Optional
 
+- `connection_name` (String) Optional name of the Azure Storage connection backing the dataset. Omit it for directly accessible URIs. Changing this forces a new dataset version.
 - `description` (String) Description of the dataset version.
 - `tags` (Map of String) Key-value tags attached to the dataset version.
 

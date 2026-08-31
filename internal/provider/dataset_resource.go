@@ -46,7 +46,7 @@ type datasetModel struct {
 
 type datasetRequest struct {
 	Type           string            `json:"type"`
-	ConnectionName string            `json:"connectionName"`
+	ConnectionName string            `json:"connectionName,omitempty"`
 	DataURI        string            `json:"dataUri"`
 	Description    string            `json:"description,omitempty"`
 	Tags           map[string]string `json:"tags,omitempty"`
@@ -159,9 +159,10 @@ func (r *datasetResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Validators:          []validator.String{stringvalidator.OneOf("uri_file", "uri_folder")},
 			},
 			"connection_name": schema.StringAttribute{
-				Required:            true,
-				MarkdownDescription: "Name of the Azure Storage connection backing the dataset. This resource registers an existing URI rather than using the pending-upload flow. Changing this forces a new dataset version.",
+				Optional:            true,
+				MarkdownDescription: "Optional name of the Azure Storage connection backing the dataset. Omit it for directly accessible URIs. Changing this forces a new dataset version.",
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
 			},
 			"data_uri": schema.StringAttribute{
 				Required:            true,

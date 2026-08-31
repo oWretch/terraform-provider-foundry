@@ -56,6 +56,33 @@ func TestDatasetRequestUsesCurrentWireFields(t *testing.T) {
 	}
 }
 
+func TestDatasetRequestOmitsOptionalConnection(t *testing.T) {
+	t.Parallel()
+
+	model := datasetModel{
+		Type:           types.StringValue("uri_file"),
+		ConnectionName: types.StringNull(),
+		DataURI:        types.StringValue("https://example.invalid/data.txt"),
+		Description:    types.StringNull(),
+		Tags:           types.MapNull(types.StringType),
+	}
+	var diagnostics diag.Diagnostics
+	encoded, err := json.Marshal(model.request(context.Background(), &diagnostics))
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	if diagnostics.HasError() {
+		t.Fatalf("request diagnostics: %v", diagnostics)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatalf("unmarshal request: %v", err)
+	}
+	if _, present := raw["connectionName"]; present {
+		t.Fatalf("request contains optional connectionName: %#v", raw)
+	}
+}
+
 func TestDatasetApplyCurrentWireFields(t *testing.T) {
 	t.Parallel()
 
