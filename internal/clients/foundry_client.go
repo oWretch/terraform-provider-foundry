@@ -68,11 +68,12 @@ type Config struct {
 }
 
 type Client struct {
-	endpoint        *url.URL
-	apiVersion      string
-	userAgent       string
-	httpClient      *http.Client
-	previewFeatures map[string]bool
+	endpoint            *url.URL
+	apiVersion          string
+	userAgent           string
+	httpClient          *http.Client
+	previewFeatures     map[string]bool
+	operationHostSuffix string
 }
 
 // PreviewEnabled reports whether the named preview feature was opted into via
@@ -112,6 +113,10 @@ type environmentConfiguration struct {
 	cloud          cloud.Configuration
 	endpointSuffix string
 	tokenScope     string
+	// operationHostSuffix is the host that runs long-running operations. The
+	// model registry reports a status URL on its own host rather than the
+	// project endpoint, and the project credential is accepted there.
+	operationHostSuffix string
 }
 
 func (e *ResponseError) Error() string {
@@ -170,9 +175,10 @@ func New(config Config) (*Client, error) {
 	}
 
 	return &Client{
-		endpoint:   endpoint,
-		apiVersion: defaultAPIVersion,
-		userAgent:  userAgent,
+		endpoint:            endpoint,
+		operationHostSuffix: environment.operationHostSuffix,
+		apiVersion:          defaultAPIVersion,
+		userAgent:           userAgent,
 		httpClient: &http.Client{
 			Transport: &retryTransport{
 				base:       authTransport,
@@ -187,21 +193,24 @@ func configurationForEnvironment(environment Environment) (environmentConfigurat
 	switch environment {
 	case EnvironmentPublic:
 		return environmentConfiguration{
-			cloud:          cloud.AzurePublic,
-			endpointSuffix: "services.ai.azure.com",
-			tokenScope:     "https://ai.azure.com/.default",
+			cloud:               cloud.AzurePublic,
+			endpointSuffix:      "services.ai.azure.com",
+			operationHostSuffix: "api.azureml.ms",
+			tokenScope:          "https://ai.azure.com/.default",
 		}, nil
 	case EnvironmentUSGovernment:
 		return environmentConfiguration{
-			cloud:          cloud.AzureGovernment,
-			endpointSuffix: "services.ai.azure.us",
-			tokenScope:     "https://ai.azure.us/.default",
+			cloud:               cloud.AzureGovernment,
+			endpointSuffix:      "services.ai.azure.us",
+			operationHostSuffix: "api.ml.azure.us",
+			tokenScope:          "https://ai.azure.us/.default",
 		}, nil
 	case EnvironmentChina:
 		return environmentConfiguration{
-			cloud:          cloud.AzureChina,
-			endpointSuffix: "services.ai.azure.cn",
-			tokenScope:     "https://ai.azure.cn/.default",
+			cloud:               cloud.AzureChina,
+			endpointSuffix:      "services.ai.azure.cn",
+			operationHostSuffix: "api.ml.azure.cn",
+			tokenScope:          "https://ai.azure.cn/.default",
 		}, nil
 	default:
 		return environmentConfiguration{}, fmt.Errorf("unsupported environment %q; use public, usgovernment, or china", environment)
