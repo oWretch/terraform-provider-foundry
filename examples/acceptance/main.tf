@@ -124,8 +124,9 @@ resource "foundry_index" "acceptance" {
 }
 
 data "foundry_index" "acceptance" {
-  count = local.test_index ? 1 : 0
-  name  = foundry_index.acceptance[0].name
+  count   = local.test_index ? 1 : 0
+  name    = foundry_index.acceptance[0].name
+  version = foundry_index.acceptance[0].version
 
   lifecycle {
     postcondition {
