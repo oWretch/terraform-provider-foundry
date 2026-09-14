@@ -102,8 +102,9 @@ resource "foundry_dataset" "acceptance" {
 }
 
 data "foundry_dataset" "acceptance" {
-  count = local.test_dataset ? 1 : 0
-  name  = foundry_dataset.acceptance[0].name
+  count   = local.test_dataset ? 1 : 0
+  name    = foundry_dataset.acceptance[0].name
+  version = foundry_dataset.acceptance[0].version
 
   lifecycle {
     postcondition {
