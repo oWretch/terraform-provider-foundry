@@ -44,3 +44,14 @@ resource "foundry_evaluation_rule" "continuous_support_eval" {
 ### Optional
 
 - `description` (String) Description of the evaluation rule.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Evaluation rules are imported using the rule ID.
+terraform import foundry_evaluation_rule.continuous_support_eval support-response-completed
+```

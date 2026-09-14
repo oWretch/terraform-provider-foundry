@@ -76,3 +76,14 @@ Optional:
 - `at` (String) ISO 8601 timestamp with an explicit UTC offset at which the routine fires once. Required when `type` is `timer`.
 - `cron_expression` (String) Cron expression defining the trigger schedule. Required when `type` is `schedule`.
 - `time_zone` (String) IANA time zone used to interpret `cron_expression`. Defaults to UTC when unset.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Routines are imported by name.
+terraform import foundry_routine.daily_summary daily-summary
+```

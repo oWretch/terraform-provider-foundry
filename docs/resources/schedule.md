@@ -103,3 +103,14 @@ Optional:
 - `start_time` (String) ISO 8601 start time for `Cron` or `Recurrence` triggers.
 - `time_zone` (String) Time zone for the trigger. Defaults to `UTC` when unset.
 - `trigger_at` (String) ISO 8601 timestamp at which a `OneTime` trigger fires. Required when `type` is `OneTime`.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Schedules are imported using the schedule ID.
+terraform import foundry_schedule.nightly_evaluation nightly-evaluation
+```

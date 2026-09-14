@@ -70,3 +70,14 @@ Read-Only:
 - `enabled` (Boolean) Whether the subcategory is enabled for evaluation.
 - `id` (String) Service-assigned subcategory identifier.
 - `name` (String) Subcategory name.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Evaluation taxonomies are imported by name.
+terraform import foundry_evaluation_taxonomy.safety customer-support-safety
+```

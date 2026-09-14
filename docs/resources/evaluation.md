@@ -79,3 +79,14 @@ Optional:
 
 - `data_mapping` (Map of String) Maps evaluator input field names to data item field references, such as `{ response = "{{item.response}}" }`.
 - `evaluator_version` (String) Specific evaluator version to pin to. Defaults to the evaluator's latest version when unset.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Evaluations are imported using the service-assigned evaluation ID.
+terraform import foundry_evaluation.support_quality eval_abc123
+```

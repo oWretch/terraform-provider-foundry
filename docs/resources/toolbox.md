@@ -143,3 +143,14 @@ Optional:
 - `name` (String) Name of the OpenAPI function.
 - `project_connection_id` (String) Project connection supplying API credentials. Required when `auth_type` is `project_connection`.
 - `spec` (String) JSON-encoded OpenAPI specification, for example `file("api.json")` or `jsonencode({ ... })`.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Toolboxes are imported by name. The provider adopts the current default version.
+terraform import foundry_toolbox.my_toolbox my-toolbox
+```

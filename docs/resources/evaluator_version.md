@@ -89,3 +89,14 @@ Optional:
 
 - `description` (String) Description of the dimension shown to the LLM judge.
 - `weight` (Number) Relative weight of the dimension in the overall rubric score.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Evaluator versions are imported using name/version.
+terraform import foundry_evaluator_version.relevance response-relevance/1
+```

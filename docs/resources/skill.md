@@ -60,3 +60,14 @@ resource "foundry_skill" "from_file" {
 - `id` (String) Identifier of the current skill version.
 - `skill_id` (String) Service-assigned identifier of the parent skill.
 - `version` (String) Current skill version number.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Skills are imported by name. The provider adopts the current default version.
+terraform import foundry_skill.greeting greeting
+```
