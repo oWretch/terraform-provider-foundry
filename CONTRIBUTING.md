@@ -36,7 +36,11 @@ Azure acceptance tests run with `TF_ACC=1` in the `foundry-ci` environment for s
 - Optional dataset values: `FOUNDRY_TEST_DATA_URI` and, when the URI needs it, `FOUNDRY_TEST_STORAGE_CONNECTION_NAME`.
 - Optional Azure AI Search values: `FOUNDRY_TEST_SEARCH_CONNECTION_NAME` and `FOUNDRY_TEST_SEARCH_INDEX_NAME`. Set both or neither.
 
+For the dataset fixture, upload a small non-sensitive file to Azure Blob Storage. Set `FOUNDRY_TEST_DATA_URI` to its full blob URL, such as `https://<account>.blob.core.windows.net/<container>/<file>`. For a private blob, add that storage account as an Azure Storage connected resource in the Foundry project and set `FOUNDRY_TEST_STORAGE_CONNECTION_NAME` to the connection name shown by Foundry. The Foundry managed identity needs data-plane access to the blob; use `Storage Blob Data Reader` for a read-only fixture.
+
+For the index fixture, create an Azure AI Search service and an index before running the tests, then add the search service as an Azure AI Search connected resource in the Foundry project. Set `FOUNDRY_TEST_SEARCH_CONNECTION_NAME` to that Foundry connection name and `FOUNDRY_TEST_SEARCH_INDEX_NAME` to the existing search index name. When the connection uses Microsoft Entra ID, grant the Foundry managed identity `Search Index Data Reader`; grant contributor roles only if a test or service feature must modify index contents.
+
 The federated identity needs the Foundry User role on the target account. No client secret is used.
 Configure its GitHub OIDC credential with audience `api://AzureADTokenExchange` and subject `repo:oWretch/terraform-provider-foundry:environment:foundry-ci`.
 
-Tag pushes matching `v*` publish a signed, non-draft GitHub release through the protected `release` environment. Configure `GPG_PRIVATE_KEY` and `GPG_FINGERPRINT` as environment secrets and require approval for that environment.
+Tag pushes matching `v*` publish a signed, non-draft GitHub release through the protected `release` environment. Configure `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` as environment secrets and require approval for that environment. GoReleaser signs the release checksum file, not each provider binary; Terraform verifies the checksum signature and then verifies downloaded archives against those checksums. Register the matching public key with the Terraform Registry during provider onboarding, and keep the private key restricted to the protected release environment.

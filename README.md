@@ -154,7 +154,7 @@ The provider targets the current Foundry project API. It does not support the de
 
 ## Releases
 
-Pushing a semantic version tag such as `v0.1.0` automatically publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance. The protected `release` environment must provide the `GPG_PRIVATE_KEY` and `GPG_FINGERPRINT` secrets. Terraform Registry registration remains a separate repository-owner step.
+Pushing a semantic version tag such as `v0.1.0` automatically publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance. The protected `release` environment must provide `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` secrets; the workflow derives the key fingerprint after importing the key. Terraform Registry registration remains a separate repository-owner step.
 
 ## License
 

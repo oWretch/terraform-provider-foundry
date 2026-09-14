@@ -25,9 +25,11 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Import signing key
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           distribution: goreleaser
@@ -35,7 +37,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
       - name: Prepare manifest attestation
         run: |
           manifest_name=$(awk '$2 ~ /_manifest.json$/ {print $2}' dist/*_SHA256SUMS)

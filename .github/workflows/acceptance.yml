@@ -65,4 +65,10 @@ jobs:
           tenant-id: ${{ vars.ARM_TENANT_ID }}
           subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
           environment: azurecloud
-      - run: ./scripts/acceptance-test.sh
+      - name: Run acceptance tests
+        env:
+          # azure/login has already authenticated the CLI. Clear values that the
+          # provider correctly treats as a separate service-principal mode.
+          ARM_CLIENT_ID: ""
+          ARM_TENANT_ID: ""
+        run: ./scripts/acceptance-test.sh
