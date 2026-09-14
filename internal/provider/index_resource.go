@@ -59,9 +59,12 @@ type indexRequest struct {
 }
 
 type indexUpdateRequest struct {
-	Type        string            `json:"type"`
-	Description *string           `json:"description"`
-	Tags        map[string]string `json:"tags"`
+	Type           string             `json:"type"`
+	ConnectionName string             `json:"connectionName"`
+	IndexName      string             `json:"indexName"`
+	FieldMapping   *indexFieldMapping `json:"fieldMapping,omitempty"`
+	Description    *string            `json:"description"`
+	Tags           map[string]string  `json:"tags"`
 }
 
 type indexResponse struct {
@@ -123,7 +126,16 @@ func (m indexModel) request(ctx context.Context, diagnostics *diag.Diagnostics) 
 }
 
 func (m indexModel) updateRequest(ctx context.Context, diagnostics *diag.Diagnostics) indexUpdateRequest {
-	request := indexUpdateRequest{Type: m.Type.ValueString()}
+	request := indexUpdateRequest{
+		Type:           m.Type.ValueString(),
+		ConnectionName: m.ConnectionName.ValueString(),
+		IndexName:      m.IndexName.ValueString(),
+	}
+	if !m.FieldMapping.IsNull() && !m.FieldMapping.IsUnknown() {
+		var mapping indexFieldMappingModel
+		diagnostics.Append(m.FieldMapping.As(ctx, &mapping, basetypes.ObjectAsOptions{})...)
+		request.FieldMapping = mapping.request(ctx, diagnostics)
+	}
 	if !m.Description.IsNull() {
 		value := m.Description.ValueString()
 		request.Description = &value

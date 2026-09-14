@@ -61,6 +61,7 @@ This file records user-visible changes to the provider.
 
 ### Fixed
 
+- The `foundry_index` resource includes the Azure AI Search connection, index name, and field mapping when updating mutable metadata, as required by the service.
 - The `foundry_file` resource no longer plans a replacement after an import. `source_path` is now optional, because the service cannot report the local path an imported file came from, and `purpose` is now read back from the service instead of relying on the configuration. Uploading still requires both, and a create without them fails with an explanatory error.
 
 - Skill `instructions` are now recovered when reading a skill, so importing a skill no longer produces a plan that publishes an identical version.

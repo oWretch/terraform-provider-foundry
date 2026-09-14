@@ -271,20 +271,22 @@ func TestAssetApplyPreservesNullTags(t *testing.T) {
 	}
 }
 
-func TestIndexUpdateOnlySendsMutableFields(t *testing.T) {
+func TestIndexUpdateIncludesRequiredAzureSearchFields(t *testing.T) {
 	t.Parallel()
 
 	model := indexModel{
-		Type:        types.StringValue("AzureSearch"),
-		Description: types.StringNull(),
-		Tags:        types.MapNull(types.StringType),
+		Type:           types.StringValue("AzureSearch"),
+		ConnectionName: types.StringValue("azure-ai-search"),
+		IndexName:      types.StringValue("tfprobe-search-index"),
+		Description:    types.StringNull(),
+		Tags:           types.MapNull(types.StringType),
 	}
 	var diagnostics diag.Diagnostics
 	encoded, err := json.Marshal(model.updateRequest(context.Background(), &diagnostics))
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
 	}
-	if got := string(encoded); got != `{"type":"AzureSearch","description":null,"tags":null}` {
+	if got := string(encoded); got != `{"type":"AzureSearch","connectionName":"azure-ai-search","indexName":"tfprobe-search-index","description":null,"tags":null}` {
 		t.Fatalf("request = %s", got)
 	}
 }
