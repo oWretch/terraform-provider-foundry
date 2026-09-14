@@ -2,7 +2,7 @@
 
 This file records user-visible changes to the provider.
 
-## Unreleased
+## 0.1.0
 
 ### Added
 
@@ -50,7 +50,6 @@ This file records user-visible changes to the provider.
 - A warning on every plan naming each preview feature and preview tool type in use, so the exemption from compatibility guarantees stays visible for as long as a preview feature is configured.
 - `foundry_model_version` resource for uploading a custom model artifact and registering it as a model version, including `LoRA` adapters. The artifact is uploaded to service-managed storage through the pending-upload handshake, because the model registry only issues a container SAS for storage it manages and rejects a practitioner's own blob URI.
 - `foundry_model_version` data source for looking up an existing model version by name and version.
-
 - `foundry_files` data source for listing uploaded files, optionally filtered by purpose. Files are identified by a service-assigned ID rather than by name, so a list is the only way to reference a file the configuration did not upload.
 - `foundry_vector_stores` data source for listing vector stores, optionally filtered by name. Vector store names are not unique, so the result is a list rather than a single store.
 

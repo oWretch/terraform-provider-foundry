@@ -1,0 +1,34 @@
+{
+  "name": "terraform-provider-foundry",
+  "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "3gb"
+  },
+  "runArgs": [
+    "--cpus=2",
+    "--memory=3g"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.16.0",
+      "tflint": "none",
+      "terragrunt": "none"
+    },
+    "ghcr.io/devcontainers-extra/features/opentofu:1": {
+      "version": "1.12.6"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "HashiCorp.terraform",
+        "OpenTofu.vscode-opentofu",
+        "ms-vscode.makefile-tools"
+      ]
+    }
+  },
+  "postCreateCommand": "go mod download && make tools",
+  "remoteUser": "vscode"
+}

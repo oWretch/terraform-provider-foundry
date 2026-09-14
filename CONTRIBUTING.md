@@ -9,6 +9,8 @@ go mod download
 make check
 ```
 
+Alternatively, open the repository in a [Dev Container](https://containers.dev/). The container includes Go, Terraform, OpenTofu, and the tools needed by `make check`; dependencies are downloaded when the container is created.
+
 Keep changes focused and add the smallest test that would fail without the change. Update provider documentation and `CHANGELOG.md` when behavior visible to users changes.
 
 Generated provider documentation lives in `docs`. Edit the provider schema, examples, or `templates`, then run `make docs`.
