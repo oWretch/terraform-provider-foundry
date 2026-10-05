@@ -3,16 +3,21 @@
 page_title: "foundry_model_version Data Source - foundry"
 subcategory: ""
 description: |-
+  ~> Preview: This data source requires enable_preview = ["models"] on the provider.
   Looks up a single version of a custom model registered on the project, for referencing an artifact this configuration does not own.
 ---
 
 # foundry_model_version (Data Source)
+
+~> **Preview:** This data source requires `enable_preview = ["models"]` on the provider.
 
 Looks up a single version of a custom model registered on the project, for referencing an artifact this configuration does not own.
 
 ## Example Usage
 
 ```terraform
+# Model version APIs require `enable_preview = ["models"]` on the provider.
+#
 data "foundry_model_version" "classifier" {
   name    = "support-classifier"
   version = "1"

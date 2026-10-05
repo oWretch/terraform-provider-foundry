@@ -12,19 +12,20 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &modelVersionDataSource{}
-	_ datasource.DataSourceWithConfigure = &modelVersionDataSource{}
+	_ datasource.DataSource                   = &modelVersionDataSource{}
+	_ datasource.DataSourceWithConfigure      = &modelVersionDataSource{}
+	_ datasource.DataSourceWithValidateConfig = &modelVersionDataSource{}
 )
 
 func NewModelVersionDataSource() datasource.DataSource {
-	return &modelVersionDataSource{}
+	return &modelVersionDataSource{previewGate: previewGate{feature: modelsPreviewFeature, name: modelsPreviewFeatureName}}
 }
 
 // modelVersionDataSource reads a single custom model version registered on the
 // project. This is distinct from foundry_deployments, which lists the model
 // deployments the project can call.
 type modelVersionDataSource struct {
-	client *clients.Client
+	previewGate
 }
 
 type modelVersionDataSourceModel struct {
@@ -45,7 +46,8 @@ func (d *modelVersionDataSource) Metadata(_ context.Context, req datasource.Meta
 
 func (d *modelVersionDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Looks up a single version of a custom model registered on the project, for referencing an artifact this configuration does not own.",
+		MarkdownDescription: "~> **Preview:** This data source requires `enable_preview = [\"models\"]` on the provider.\n\n" +
+			"Looks up a single version of a custom model registered on the project, for referencing an artifact this configuration does not own.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -93,6 +95,10 @@ func (d *modelVersionDataSource) Configure(_ context.Context, req datasource.Con
 	d.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
+func (d *modelVersionDataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
+	d.ValidateDataSourceConfig(ctx, req, resp)
+}
+
 func (d *modelVersionDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config modelVersionDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -100,8 +106,14 @@ func (d *modelVersionDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
+	previewCtx, err := d.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the model version", err.Error())
+		return
+	}
+
 	var response modelVersionResponse
-	err := d.client.JSON(ctx, http.MethodGet, modelVersionModel{
+	err = d.client.JSON(previewCtx, http.MethodGet, modelVersionModel{
 		Name:    config.Name,
 		Version: config.Version,
 	}.path(), nil, &response)

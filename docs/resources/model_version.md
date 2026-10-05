@@ -3,6 +3,7 @@
 page_title: "foundry_model_version Resource - foundry"
 subcategory: ""
 description: |-
+  ~> Preview: This resource requires enable_preview = ["models"] on the provider.
   Registers a custom model artifact as a project model asset, so that it can be deployed or referenced by other Foundry resources.
   The artifact is uploaded from a local path into storage the service issues for the version. Referencing an existing blob in your own storage account is not supported by the service: the model registry only resolves artifacts held in storage it manages. Use foundry_dataset when you need to reference your own storage instead.
   Only description and tags can be changed in place. Changing the artifact or any of its metadata publishes a new version.
@@ -11,6 +12,8 @@ description: |-
 ---
 
 # foundry_model_version (Resource)
+
+~> **Preview:** This resource requires `enable_preview = ["models"]` on the provider.
 
 Registers a custom model artifact as a project model asset, so that it can be deployed or referenced by other Foundry resources.
 
@@ -25,6 +28,8 @@ That said, this resource is a reasonable way to publish a model from a CI or CD 
 ## Example Usage
 
 ```terraform
+# Model version APIs require `enable_preview = ["models"]` on the provider.
+#
 # A full-weight model uploaded from a directory. The whole directory is sent,
 # preserving its layout, which is what a model split across weight, tokenizer,
 # and configuration files needs.

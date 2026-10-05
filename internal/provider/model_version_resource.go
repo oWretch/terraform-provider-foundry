@@ -27,13 +27,19 @@ import (
 )
 
 var (
-	_ resource.Resource                = &modelVersionResource{}
-	_ resource.ResourceWithConfigure   = &modelVersionResource{}
-	_ resource.ResourceWithImportState = &modelVersionResource{}
+	_ resource.Resource                   = &modelVersionResource{}
+	_ resource.ResourceWithConfigure      = &modelVersionResource{}
+	_ resource.ResourceWithImportState    = &modelVersionResource{}
+	_ resource.ResourceWithValidateConfig = &modelVersionResource{}
+)
+
+const (
+	modelsPreviewFeature     = "Models"
+	modelsPreviewFeatureName = "models"
 )
 
 func NewModelVersionResource() resource.Resource {
-	return &modelVersionResource{}
+	return &modelVersionResource{previewGate: previewGate{feature: modelsPreviewFeature, name: modelsPreviewFeatureName}}
 }
 
 // modelVersionResource registers a custom model artifact as a project model
@@ -49,7 +55,7 @@ func NewModelVersionResource() resource.Resource {
 // opposite of foundry_dataset, which does reference practitioner storage
 // directly through connectionName.
 type modelVersionResource struct {
-	client *clients.Client
+	previewGate
 }
 
 type modelVersionModel struct {
@@ -130,7 +136,8 @@ func (r *modelVersionResource) Schema(_ context.Context, _ resource.SchemaReques
 	requiresReplace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Registers a custom model artifact as a project model asset, so that it can be deployed or referenced by other Foundry resources.\n\n" +
+		MarkdownDescription: "~> **Preview:** This resource requires `enable_preview = [\"models\"]` on the provider.\n\n" +
+			"Registers a custom model artifact as a project model asset, so that it can be deployed or referenced by other Foundry resources.\n\n" +
 			"The artifact is uploaded from a local path into storage the service issues for the version. Referencing an existing blob in your own storage account is not supported by the service: the model registry only resolves artifacts held in storage it manages. Use `foundry_dataset` when you need to reference your own storage instead.\n\n" +
 			"Only `description` and `tags` can be changed in place. Changing the artifact or any of its metadata publishes a new version.\n\n" +
 			"~> **Consider whether Terraform is the right tool for publishing the artifact.** A model artifact is a build output. It is produced by a training or fine-tuning pipeline, is identified by its contents, and is promoted rather than converged. Terraform's model is to make reality match a declaration, which fits deployment configuration better than it fits shipping a large binary. Publishing from the pipeline that produced the artifact, and using the `foundry_model_version` data source to reference the published version from Terraform, keeps the upload out of `terraform apply`.\n\n" +
@@ -224,6 +231,10 @@ func (r *modelVersionResource) Configure(_ context.Context, req resource.Configu
 	r.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
+func (r *modelVersionResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	r.ValidateResourceConfig(ctx, req, resp)
+}
+
 func (m modelVersionModel) path() string {
 	return fmt.Sprintf("models/%s/versions/%s", m.Name.ValueString(), m.Version.ValueString())
 }
@@ -310,8 +321,14 @@ func (r *modelVersionResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to create the model version", err.Error())
+		return
+	}
+
 	var upload pendingUploadResponse
-	if err := r.client.JSON(ctx, http.MethodPost, plan.path()+"/startPendingUpload",
+	if err := r.client.JSON(previewCtx, http.MethodPost, plan.path()+"/startPendingUpload",
 		pendingUploadRequest{PendingUploadType: "TemporaryBlobReference"}, &upload); err != nil {
 		resp.Diagnostics.AddError("Unable to start the model artifact upload", err.Error())
 		return
@@ -328,13 +345,13 @@ func (r *modelVersionResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	var location operationLocation
-	if err := r.client.JSON(ctx, http.MethodPost, plan.path()+"/createAsync", request, &location); err != nil {
+	if err := r.client.JSON(previewCtx, http.MethodPost, plan.path()+"/createAsync", request, &location); err != nil {
 		resp.Diagnostics.AddError("Unable to create the model version", err.Error())
 		return
 	}
 
 	var response modelVersionResponse
-	if err := r.client.WaitForOperation(ctx, location.Location, &response); err != nil {
+	if err := r.client.WaitForOperation(previewCtx, location.Location, &response); err != nil {
 		resp.Diagnostics.AddError("Model version was not registered", err.Error())
 		return
 	}
@@ -350,8 +367,14 @@ func (r *modelVersionResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the model version", err.Error())
+		return
+	}
+
 	var response modelVersionResponse
-	err := r.client.JSON(ctx, http.MethodGet, state.path(), nil, &response)
+	err = r.client.JSON(previewCtx, http.MethodGet, state.path(), nil, &response)
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -372,6 +395,12 @@ func (r *modelVersionResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update the model version", err.Error())
+		return
+	}
+
 	request := modelVersionUpdateRequest{Description: plan.Description.ValueString()}
 	if !plan.Tags.IsNull() && !plan.Tags.IsUnknown() {
 		resp.Diagnostics.Append(plan.Tags.ElementsAs(ctx, &request.Tags, false)...)
@@ -381,7 +410,7 @@ func (r *modelVersionResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	var response modelVersionResponse
-	if err := r.client.JSONWithContentType(ctx, http.MethodPatch, plan.path(),
+	if err := r.client.JSONWithContentType(previewCtx, http.MethodPatch, plan.path(),
 		"application/merge-patch+json", request, &response); err != nil {
 		resp.Diagnostics.AddError("Unable to update the model version", err.Error())
 		return
@@ -398,7 +427,13 @@ func (r *modelVersionResource) Delete(ctx context.Context, req resource.DeleteRe
 		return
 	}
 
-	err := r.client.JSON(ctx, http.MethodDelete, state.path(), nil, nil)
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to delete the model version", err.Error())
+		return
+	}
+
+	err = r.client.JSON(previewCtx, http.MethodDelete, state.path(), nil, nil)
 	if err != nil && !clients.IsNotFound(err) {
 		resp.Diagnostics.AddError("Unable to delete the model version", err.Error())
 	}

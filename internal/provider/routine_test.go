@@ -4,12 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
 
 func TestRoutineRequestRoundTrip(t *testing.T) {
@@ -124,101 +120,5 @@ func TestRoutineSchemaAttributes(t *testing.T) {
 		if _, ok := schemaResp.Schema.Attributes[name]; !ok {
 			t.Errorf("schema missing attribute %q", name)
 		}
-	}
-}
-
-func TestRoutineValidateConfig(t *testing.T) {
-	t.Parallel()
-
-	enabledClient, err := clients.New(clients.Config{
-		AccountName:     "example",
-		ProjectName:     "demo",
-		Environment:     clients.EnvironmentPublic,
-		PreviewFeatures: []string{routinesPreviewFeatureName},
-		Auth:            clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-
-	disabledClient, err := clients.New(clients.Config{
-		AccountName: "example",
-		ProjectName: "demo",
-		Environment: clients.EnvironmentPublic,
-		Auth:        clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-
-	tests := []struct {
-		name      string
-		client    *clients.Client
-		wantError bool
-	}{
-		{name: "enabled", client: enabledClient, wantError: false},
-		{name: "disabled", client: disabledClient, wantError: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			r := &routineResource{previewGate: previewGate{client: tt.client, feature: routinesPreviewFeature, name: routinesPreviewFeatureName}}
-			resp := &resource.ValidateConfigResponse{}
-			r.ValidateConfig(context.Background(), resource.ValidateConfigRequest{Config: tfsdk.Config{}}, resp)
-
-			if resp.Diagnostics.HasError() != tt.wantError {
-				t.Errorf("HasError() = %v, want %v (%v)", resp.Diagnostics.HasError(), tt.wantError, resp.Diagnostics)
-			}
-		})
-	}
-}
-
-func TestRoutineDataSourceValidateConfig(t *testing.T) {
-	t.Parallel()
-
-	enabledClient, err := clients.New(clients.Config{
-		AccountName:     "example",
-		ProjectName:     "demo",
-		Environment:     clients.EnvironmentPublic,
-		PreviewFeatures: []string{routinesPreviewFeatureName},
-		Auth:            clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-
-	disabledClient, err := clients.New(clients.Config{
-		AccountName: "example",
-		ProjectName: "demo",
-		Environment: clients.EnvironmentPublic,
-		Auth:        clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
-	})
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-
-	tests := []struct {
-		name      string
-		client    *clients.Client
-		wantError bool
-	}{
-		{name: "enabled", client: enabledClient, wantError: false},
-		{name: "disabled", client: disabledClient, wantError: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			d := &routineDataSource{previewGate: previewGate{client: tt.client, feature: routinesPreviewFeature, name: routinesPreviewFeatureName}}
-			resp := &datasource.ValidateConfigResponse{}
-			d.ValidateConfig(context.Background(), datasource.ValidateConfigRequest{Config: tfsdk.Config{}}, resp)
-
-			if resp.Diagnostics.HasError() != tt.wantError {
-				t.Errorf("HasError() = %v, want %v (%v)", resp.Diagnostics.HasError(), tt.wantError, resp.Diagnostics)
-			}
-		})
 	}
 }

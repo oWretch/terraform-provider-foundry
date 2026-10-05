@@ -35,13 +35,8 @@ func versionPath(kind, name, version string) string {
 
 // deleteParent deletes a skill or toolbox parent by name, treating an
 // already-absent parent as success.
-func deleteParent(ctx context.Context, gate previewGate, kind, name string) error {
-	client := gate.client
-	ctx, err := gate.previewContext(ctx)
-	if err != nil {
-		return err
-	}
-	err = client.JSON(ctx, http.MethodDelete, parentPath(kind, name), nil, nil)
+func deleteParent(ctx context.Context, client *clients.Client, kind, name string) error {
+	err := client.JSON(ctx, http.MethodDelete, parentPath(kind, name), nil, nil)
 	if clients.IsNotFound(err) {
 		return nil
 	}
@@ -57,12 +52,7 @@ type defaultVersionRequest struct {
 // promoteDefaultVersion updates the parent's default_version pointer to
 // version, using method and path conventions that differ slightly between
 // skills (POST .../{name}) and toolboxes (PATCH .../{name}).
-func promoteDefaultVersion(ctx context.Context, gate previewGate, kind, name, version, method string) error {
-	client := gate.client
-	ctx, err := gate.previewContext(ctx)
-	if err != nil {
-		return err
-	}
+func promoteDefaultVersion(ctx context.Context, client *clients.Client, kind, name, version, method string) error {
 	return client.JSON(ctx, method, parentPath(kind, name), defaultVersionRequest{DefaultVersion: version}, nil)
 }
 

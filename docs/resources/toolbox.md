@@ -3,22 +3,19 @@
 page_title: "foundry_toolbox Resource - foundry"
 subcategory: ""
 description: |-
-  ~> Preview: This resource requires "toolboxes" in the provider's enable_preview attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
   Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing tools, skills, or description publishes a new immutable toolbox version and promotes it to the toolbox's default version.
 ---
 
 # foundry_toolbox (Resource)
-
-~> **Preview:** This resource requires `"toolboxes"` in the provider's `enable_preview` attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
 
 Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing `tools`, `skills`, or `description` publishes a new immutable toolbox version and promotes it to the toolbox's default version.
 
 ## Example Usage
 
 ```terraform
-# Toolboxes are a preview feature; opt in on the provider block:
+# The skill attached below is a preview feature. Opt in on the provider block:
 # provider "foundry" {
-#   enable_preview = ["toolboxes", "skills"]
+#   enable_preview = ["skills"]
 # }
 
 resource "foundry_skill" "greeting" {
@@ -87,7 +84,7 @@ Optional:
 
 Required:
 
-- `type` (String) Tool type. One of `code_interpreter`, `file_search`, `web_search`, `mcp`, `azure_ai_search`, `openapi`, `a2a`, `toolbox_search`, `a2a_preview`, `browser_automation_preview`, `reminder_preview`, `work_iq_preview`, `fabric_iq_preview`, `toolbox_search_preview`. Types ending in `_preview` are in preview and require `"toolbox_tools"` in the provider's `enable_preview` attribute.
+- `type` (String) Tool type. One of `code_interpreter`, `file_search`, `web_search`, `mcp`, `azure_ai_search`, `openapi`, `a2a`, `toolbox_search`, `a2a_preview`, `browser_automation_preview`, `reminder_preview`, `work_iq_preview`, `fabric_iq_preview`, `toolbox_search_preview`, `web_iq_preview`. Types ending in `_preview` are in preview and require `"toolbox_tools"` in the provider's `enable_preview` attribute.
 
 Optional:
 

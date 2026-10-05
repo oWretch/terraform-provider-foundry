@@ -1,15 +1,10 @@
 package provider
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-
-	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
 
 func TestToolboxModelApplyVersionRoundTrip(t *testing.T) {
@@ -100,107 +95,5 @@ func TestToolboxModelSkillReferencesNilWhenEmpty(t *testing.T) {
 	var model toolboxModel
 	if model.skillReferences() != nil {
 		t.Error("expected nil skill references for an empty skills list")
-	}
-}
-
-func TestToolboxResourceRequiresPreviewFeature(t *testing.T) {
-	t.Parallel()
-
-	client, err := clients.New(clients.Config{
-		AccountName: "acct",
-		ProjectName: "proj",
-		Environment: clients.EnvironmentPublic,
-		Auth:        clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "key"},
-	})
-	if err != nil {
-		t.Fatalf("build client: %v", err)
-	}
-
-	r := &toolboxResource{}
-	r.client = client
-	r.feature = toolboxesFeature
-	r.name = "toolboxes"
-
-	var resp resource.ValidateConfigResponse
-	r.ValidateResourceConfig(context.Background(), resource.ValidateConfigRequest{}, &resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected an error when toolboxes preview is not enabled")
-	}
-}
-
-func TestToolboxResourceAllowsEnabledPreviewFeature(t *testing.T) {
-	t.Parallel()
-
-	client, err := clients.New(clients.Config{
-		AccountName:     "acct",
-		ProjectName:     "proj",
-		Environment:     clients.EnvironmentPublic,
-		Auth:            clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "key"},
-		PreviewFeatures: []string{toolboxesFeatureName},
-	})
-	if err != nil {
-		t.Fatalf("build client: %v", err)
-	}
-
-	r := &toolboxResource{}
-	r.client = client
-	r.feature = toolboxesFeature
-	r.name = "toolboxes"
-
-	var resp resource.ValidateConfigResponse
-	r.ValidateResourceConfig(context.Background(), resource.ValidateConfigRequest{}, &resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected error when toolboxes preview is enabled: %v", resp.Diagnostics)
-	}
-}
-
-func TestToolboxDataSourceRequiresPreviewFeature(t *testing.T) {
-	t.Parallel()
-
-	client, err := clients.New(clients.Config{
-		AccountName: "acct",
-		ProjectName: "proj",
-		Environment: clients.EnvironmentPublic,
-		Auth:        clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "key"},
-	})
-	if err != nil {
-		t.Fatalf("build client: %v", err)
-	}
-
-	d := &toolboxDataSource{}
-	d.client = client
-	d.feature = toolboxesFeature
-	d.name = "toolboxes"
-
-	var resp datasource.ValidateConfigResponse
-	d.ValidateDataSourceConfig(context.Background(), datasource.ValidateConfigRequest{}, &resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected an error when toolboxes preview is not enabled")
-	}
-}
-
-func TestToolboxDataSourceAllowsEnabledPreviewFeature(t *testing.T) {
-	t.Parallel()
-
-	client, err := clients.New(clients.Config{
-		AccountName:     "acct",
-		ProjectName:     "proj",
-		Environment:     clients.EnvironmentPublic,
-		Auth:            clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "key"},
-		PreviewFeatures: []string{toolboxesFeatureName},
-	})
-	if err != nil {
-		t.Fatalf("build client: %v", err)
-	}
-
-	d := &toolboxDataSource{}
-	d.client = client
-	d.feature = toolboxesFeature
-	d.name = "toolboxes"
-
-	var resp datasource.ValidateConfigResponse
-	d.ValidateDataSourceConfig(context.Background(), datasource.ValidateConfigRequest{}, &resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected error when toolboxes preview is enabled: %v", resp.Diagnostics)
 	}
 }

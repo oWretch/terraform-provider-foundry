@@ -16,16 +16,10 @@ import (
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
 
-const routinesPreviewFeature = "Routines"
-
-// routinesPreviewFeatureName is the enable_preview value users write to opt in.
-const routinesPreviewFeatureName = "routines"
-
 var (
-	_ resource.Resource                   = &routineResource{}
-	_ resource.ResourceWithConfigure      = &routineResource{}
-	_ resource.ResourceWithImportState    = &routineResource{}
-	_ resource.ResourceWithValidateConfig = &routineResource{}
+	_ resource.Resource                = &routineResource{}
+	_ resource.ResourceWithConfigure   = &routineResource{}
+	_ resource.ResourceWithImportState = &routineResource{}
 )
 
 func NewRoutineResource() resource.Resource {
@@ -33,7 +27,7 @@ func NewRoutineResource() resource.Resource {
 }
 
 type routineResource struct {
-	previewGate
+	client *clients.Client
 }
 
 // routineTriggerModel models the single supported trigger of a routine. The
@@ -160,8 +154,7 @@ func (r *routineResource) Metadata(_ context.Context, req resource.MetadataReque
 
 func (r *routineResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "~> **Preview:** This resource requires `enable_preview = [\"routines\"]` on the provider. Preview features may change or be removed in any provider release without following semantic versioning.\n\n" +
-			"Manages a routine, a named automation rule that triggers an agent on a schedule, at a specific time, or in response to an external event. Only a schedule (cron) or timer trigger is currently supported.",
+		MarkdownDescription: "Manages a routine, a named automation rule that triggers an agent on a schedule, at a specific time, or in response to an external event. Only a schedule (cron) or timer trigger is currently supported.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -229,20 +222,13 @@ func (r *routineResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 }
 
 func (r *routineResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	client := clientFromProviderData(req.ProviderData, &resp.Diagnostics)
-	r.previewGate = previewGate{client: client, feature: routinesPreviewFeature, name: routinesPreviewFeatureName}
+	r.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
 func (r *routineResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan routineModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	ctx, err := r.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to create routine", err.Error())
 		return
 	}
 
@@ -263,14 +249,8 @@ func (r *routineResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	ctx, err := r.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to read routine", err.Error())
-		return
-	}
-
 	var response routineResponse
-	err = r.client.JSON(ctx, http.MethodGet, state.path(), nil, &response)
+	err := r.client.JSON(ctx, http.MethodGet, state.path(), nil, &response)
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -291,12 +271,6 @@ func (r *routineResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	ctx, err := r.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to update routine", err.Error())
-		return
-	}
-
 	var response routineResponse
 	if err := r.client.JSON(ctx, http.MethodPut, plan.path(), plan.request(), &response); err != nil {
 		resp.Diagnostics.AddError("Unable to update routine", err.Error())
@@ -314,13 +288,7 @@ func (r *routineResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	ctx, err := r.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to delete routine", err.Error())
-		return
-	}
-
-	err = r.client.JSON(ctx, http.MethodDelete, state.path(), nil, nil)
+	err := r.client.JSON(ctx, http.MethodDelete, state.path(), nil, nil)
 	if err != nil && !clients.IsNotFound(err) {
 		resp.Diagnostics.AddError("Unable to delete routine", err.Error())
 	}
@@ -328,13 +296,4 @@ func (r *routineResource) Delete(ctx context.Context, req resource.DeleteRequest
 
 func (r *routineResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), req.ID)...)
-}
-
-// ValidateConfig delegates to previewGate. Go's embedding does not promote
-// previewGate.ValidateResourceConfig to satisfy
-// resource.ResourceWithValidateConfig on *routineResource automatically in
-// all toolchains, so this thin wrapper makes the interface assertion
-// explicit and stable.
-func (r *routineResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	r.ValidateResourceConfig(ctx, req, resp)
 }

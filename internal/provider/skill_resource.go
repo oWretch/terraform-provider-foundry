@@ -259,7 +259,12 @@ func (r *skillResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 	// Skill versions don't auto-promote on update the way the first version
 	// does, so explicitly point default_version at the new version.
-	if err := promoteDefaultVersion(ctx, r.previewGate, "skills", plan.Name.ValueString(), version.Version, http.MethodPost); err != nil {
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to promote new skill version to default", err.Error())
+		return
+	}
+	if err := promoteDefaultVersion(previewCtx, r.client, "skills", plan.Name.ValueString(), version.Version, http.MethodPost); err != nil {
 		resp.Diagnostics.AddError("Unable to promote new skill version to default", err.Error())
 		return
 	}
@@ -273,7 +278,12 @@ func (r *skillResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := deleteParent(ctx, r.previewGate, "skills", state.Name.ValueString()); err != nil {
+	previewCtx, err := r.previewContext(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to delete skill", err.Error())
+		return
+	}
+	if err := deleteParent(previewCtx, r.client, "skills", state.Name.ValueString()); err != nil {
 		resp.Diagnostics.AddError("Unable to delete skill", err.Error())
 	}
 }

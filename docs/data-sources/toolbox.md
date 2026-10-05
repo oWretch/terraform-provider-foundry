@@ -3,24 +3,16 @@
 page_title: "foundry_toolbox Data Source - foundry"
 subcategory: ""
 description: |-
-  ~> Preview: This data source requires "toolboxes" in the provider's enable_preview attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
   Looks up a single version of a Foundry toolbox. Use this to reference an existing toolbox version's tool and skill configuration.
 ---
 
 # foundry_toolbox (Data Source)
-
-~> **Preview:** This data source requires `"toolboxes"` in the provider's `enable_preview` attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.
 
 Looks up a single version of a Foundry toolbox. Use this to reference an existing toolbox version's tool and skill configuration.
 
 ## Example Usage
 
 ```terraform
-# Toolboxes are a preview feature; opt in on the provider block:
-# provider "foundry" {
-#   enable_preview = ["toolboxes"]
-# }
-
 data "foundry_toolbox" "my_toolbox" {
   name    = "my-toolbox"
   version = foundry_toolbox.my_toolbox.default_version

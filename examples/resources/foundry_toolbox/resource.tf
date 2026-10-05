@@ -1,6 +1,6 @@
-# Toolboxes are a preview feature; opt in on the provider block:
+# The skill attached below is a preview feature. Opt in on the provider block:
 # provider "foundry" {
-#   enable_preview = ["toolboxes", "skills"]
+#   enable_preview = ["skills"]
 # }
 
 resource "foundry_skill" "greeting" {

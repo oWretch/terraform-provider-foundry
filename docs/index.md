@@ -49,10 +49,9 @@ Opt-in is per feature, so enabling one preview family does not enable the others
 | `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
 | `external_agents` | `foundry_external_agent` |
 | `memory_stores` | `foundry_memory_store` |
-| `routines` | `foundry_routine` |
+| `models` | `foundry_model_version` |
 | `schedules` | `foundry_schedule` |
 | `skills` | `foundry_skill` |
-| `toolboxes` | `foundry_toolbox` |
 | `toolbox_tools` | Preview tool types in the `tools` block of `foundry_toolbox` |
 
 Preview tool types are named by the service with a `_preview` suffix, such as `fabric_iq_preview`. The suffix is part of the tool type, not a modifier the provider adds, and a preview type is not interchangeable with its non-preview counterpart: `a2a` and `a2a_preview` coexist and take different arguments. When a tool type reaches general availability the service publishes it under a new name, so configurations using the preview name must be updated at that point. Each preview tool in use is reported as a warning on every plan.

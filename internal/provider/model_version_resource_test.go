@@ -1,6 +1,67 @@
 package provider
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+
+	"github.com/oWretch/terraform-provider-foundry/internal/clients"
+)
+
+func TestModelVersionRequiresPreviewFeature(t *testing.T) {
+	t.Parallel()
+
+	client, err := clients.New(clients.Config{
+		AccountName: "example",
+		ProjectName: "demo",
+		Environment: clients.EnvironmentPublic,
+		Auth:        clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	resourceUnderTest := NewModelVersionResource().(*modelVersionResource)
+	resourceUnderTest.client = client
+	var resourceResponse resource.ValidateConfigResponse
+	resourceUnderTest.ValidateConfig(context.Background(), resource.ValidateConfigRequest{}, &resourceResponse)
+	if !resourceResponse.Diagnostics.HasError() {
+		t.Fatal("expected the model version resource to require the models preview feature")
+	}
+
+	dataSourceUnderTest := NewModelVersionDataSource().(*modelVersionDataSource)
+	dataSourceUnderTest.client = client
+	var dataSourceResponse datasource.ValidateConfigResponse
+	dataSourceUnderTest.ValidateConfig(context.Background(), datasource.ValidateConfigRequest{}, &dataSourceResponse)
+	if !dataSourceResponse.Diagnostics.HasError() {
+		t.Fatal("expected the model version data source to require the models preview feature")
+	}
+}
+
+func TestModelVersionAllowsPreviewFeature(t *testing.T) {
+	t.Parallel()
+
+	client, err := clients.New(clients.Config{
+		AccountName:     "example",
+		ProjectName:     "demo",
+		Environment:     clients.EnvironmentPublic,
+		PreviewFeatures: []string{modelsPreviewFeatureName},
+		Auth:            clients.Authentication{Method: clients.AuthenticationAPIKey, APIKey: "secret"},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	resourceUnderTest := NewModelVersionResource().(*modelVersionResource)
+	resourceUnderTest.client = client
+	var response resource.ValidateConfigResponse
+	resourceUnderTest.ValidateConfig(context.Background(), resource.ValidateConfigRequest{}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatalf("unexpected preview validation error: %v", response.Diagnostics)
+	}
+}
 
 func TestEscapeBlobPath(t *testing.T) {
 	cases := []struct {

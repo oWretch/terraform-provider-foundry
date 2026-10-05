@@ -1,3 +1,5 @@
+# Model version APIs require `enable_preview = ["models"]` on the provider.
+#
 # A full-weight model uploaded from a directory. The whole directory is sent,
 # preserving its layout, which is what a model split across weight, tokenizer,
 # and configuration files needs.

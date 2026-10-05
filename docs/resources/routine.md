@@ -3,26 +3,19 @@
 page_title: "foundry_routine Resource - foundry"
 subcategory: ""
 description: |-
-  ~> Preview: This resource requires enable_preview = ["routines"] on the provider. Preview features may change or be removed in any provider release without following semantic versioning.
   Manages a routine, a named automation rule that triggers an agent on a schedule, at a specific time, or in response to an external event. Only a schedule (cron) or timer trigger is currently supported.
 ---
 
 # foundry_routine (Resource)
-
-~> **Preview:** This resource requires `enable_preview = ["routines"]` on the provider. Preview features may change or be removed in any provider release without following semantic versioning.
 
 Manages a routine, a named automation rule that triggers an agent on a schedule, at a specific time, or in response to an external event. Only a schedule (cron) or timer trigger is currently supported.
 
 ## Example Usage
 
 ```terraform
-# foundry_routine is a preview feature. It requires an explicit opt-in on
-# the provider before it can be used, and preview features may change or be
-# removed in any provider release without following semantic versioning.
 provider "foundry" {
-  account_name   = var.foundry_account_name
-  project_name   = var.foundry_project_name
-  enable_preview = ["routines"]
+  account_name = var.foundry_account_name
+  project_name = var.foundry_project_name
 }
 
 resource "foundry_routine" "daily_summary" {

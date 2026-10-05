@@ -35,6 +35,7 @@ const (
 	toolTypeWorkIQPreview     = "work_iq_preview"
 	toolTypeFabricIQPreview   = "fabric_iq_preview"
 	toolTypeToolboxSearchPrev = "toolbox_search_preview"
+	toolTypeWebIQPreview      = "web_iq_preview"
 )
 
 // previewToolTypes are the tool types that are still in preview. They are
@@ -54,6 +55,7 @@ var previewToolTypes = map[string]struct{}{
 	toolTypeWorkIQPreview:     {},
 	toolTypeFabricIQPreview:   {},
 	toolTypeToolboxSearchPrev: {},
+	toolTypeWebIQPreview:      {},
 }
 
 func toolTypeValues() []string {
@@ -62,7 +64,7 @@ func toolTypeValues() []string {
 		toolTypeMCP, toolTypeAzureAISearch, toolTypeOpenAPI, toolTypeA2A,
 		toolTypeToolboxSearch, toolTypeA2APreview, toolTypeBrowserAutomation,
 		toolTypeReminderPreview, toolTypeWorkIQPreview, toolTypeFabricIQPreview,
-		toolTypeToolboxSearchPrev,
+		toolTypeToolboxSearchPrev, toolTypeWebIQPreview,
 	}
 }
 
@@ -372,6 +374,7 @@ var requiredToolFields = map[string][]string{
 	toolTypeWorkIQPreview:     {"project_connection_id"},
 	toolTypeFabricIQPreview:   {"project_connection_id"},
 	toolTypeBrowserAutomation: {"project_connection_id"},
+	toolTypeWebIQPreview:      {"project_connection_id"},
 }
 
 // allowedToolFields maps a tool type to every attribute it accepts, so that
@@ -393,6 +396,22 @@ var allowedToolFields = map[string]map[string]bool{
 	toolTypeWorkIQPreview:     set("project_connection_id"),
 	toolTypeFabricIQPreview:   set("project_connection_id", "server_label", "server_url", "require_approval"),
 	toolTypeBrowserAutomation: set("project_connection_id"),
+	toolTypeWebIQPreview:      set("project_connection_id", "server_label", "require_approval"),
+}
+
+func unsupportedToolTypes(tools []toolRequest) []string {
+	unsupported := map[string]struct{}{}
+	for _, tool := range tools {
+		if _, supported := allowedToolFields[tool.Type]; !supported {
+			unsupported[tool.Type] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(unsupported))
+	for toolType := range unsupported {
+		result = append(result, toolType)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func set(values ...string) map[string]bool {
@@ -769,6 +788,14 @@ func flattenTools(responses []toolRequest, prior []toolModel) []toolModel {
 		// permanent diff after an import, so the derived value is discarded.
 		if response.Type == toolTypeFabricIQPreview && response.ServerLabel == response.ProjectConnectionID {
 			tool.ServerLabel = types.StringNull()
+		}
+		if response.Type == toolTypeWebIQPreview && previous != nil {
+			if previous.ServerLabel.IsNull() {
+				tool.ServerLabel = types.StringNull()
+			}
+			if previous.RequireApproval.IsNull() {
+				tool.RequireApproval = types.StringNull()
+			}
 		}
 		tools = append(tools, tool)
 	}

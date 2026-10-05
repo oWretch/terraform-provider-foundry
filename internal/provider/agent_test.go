@@ -318,6 +318,18 @@ func TestManagedAgentDefinitionRejectsUnsupportedFieldsAndKindMismatch(t *testin
 			wantError:  true,
 		},
 		{
+			name:       "prompt harness",
+			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1","harness":{"type":"github_copilot"}}`)},
+			definition: &promptAgentDefinition{},
+			wantError:  true,
+		},
+		{
+			name:       "prompt skills",
+			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1","skills":[{"name":"review"}]}`)},
+			definition: &promptAgentDefinition{},
+			wantError:  true,
+		},
+		{
 			name:       "hosted code",
 			version:    agentVersion{Definition: json.RawMessage(`{"kind":"hosted","cpu":"1","memory":"2Gi","code_configuration":{"runtime":"python_3_12"}}`)},
 			definition: &hostedAgentDefinition{},

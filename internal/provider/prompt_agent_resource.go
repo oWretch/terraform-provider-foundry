@@ -48,6 +48,8 @@ type promptAgentDefinition struct {
 	ToolChoice       json.RawMessage            `json:"tool_choice,omitempty"`
 	Text             json.RawMessage            `json:"text,omitempty"`
 	StructuredInputs map[string]json.RawMessage `json:"structured_inputs,omitempty"`
+	Harness          json.RawMessage            `json:"harness,omitempty"`
+	Skills           []json.RawMessage          `json:"skills,omitempty"`
 }
 
 func (m promptAgentModel) definition() promptAgentDefinition {
@@ -87,6 +89,12 @@ func (d *promptAgentDefinition) validateSupported() error {
 	}
 	if len(d.StructuredInputs) > 0 {
 		fields = append(fields, "structured_inputs")
+	}
+	if hasJSONValue(d.Harness) {
+		fields = append(fields, "harness")
+	}
+	if len(d.Skills) > 0 {
+		fields = append(fields, "skills")
 	}
 	if len(fields) > 0 {
 		return fmt.Errorf(

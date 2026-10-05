@@ -24,8 +24,8 @@ This file records user-visible changes to the provider.
 - `foundry_connections` data source listing the connections configured on the account and project, for referencing an existing connection by name.
 - `foundry_memory_store` resource (preview) for managing a memory store that extracts and stores user profile, chat summary, and procedural memories from agent conversations. Requires `enable_preview = ["memory_stores"]` on the provider.
 - `foundry_memory_store` data source (preview) for looking up the current memory store object by name. Requires `enable_preview = ["memory_stores"]` on the provider.
-- `foundry_routine` resource (preview) for managing a named automation rule that triggers an agent on a schedule or at a specific time. Requires `enable_preview = ["routines"]` on the provider.
-- `foundry_routine` data source (preview) for looking up an existing routine by name. Requires `enable_preview = ["routines"]` on the provider.
+- `foundry_routine` resource for managing a named automation rule that triggers an agent on a schedule or at a specific time.
+- `foundry_routine` data source for looking up an existing routine by name.
 - `foundry_schedule` resource (preview) for managing a schedule that runs an evaluation or insight task on a cron, recurrence, or one-time trigger. Requires `enable_preview = ["schedules"]` on the provider.
 - `foundry_schedule` data source (preview) for looking up an existing schedule by ID. Requires `enable_preview = ["schedules"]` on the provider.
 - `foundry_external_agent` resource (preview) for registering an agent hosted outside Foundry for observability, tracing, and evaluation only. Requires `enable_preview = ["external_agents"]` on the provider.
@@ -34,8 +34,8 @@ This file records user-visible changes to the provider.
 - `agent_endpoint` computed attribute (preview) on `foundry_prompt_agent` and `foundry_hosted_agent`, surfacing the agent's built-in endpoint protocols and version traffic routing rules. Documented as requiring `enable_preview = ["agent_endpoints"]`; verified live that the service currently populates this field without any `Foundry-Features` header, but the attribute is treated as preview and may change without following semver.
 - `foundry_skill` resource (preview) for managing a named skill, the single owner of its immutable version chain and `default_version` pointer. Create publishes the first version from inline instructions or an uploaded `SKILL.md`/`.zip` file; any change publishes a new version and promotes it to default. Requires `enable_preview = ["skills"]` on the provider.
 - `foundry_skill` data source (preview) for looking up a specific skill version's metadata by name and version. Requires `enable_preview = ["skills"]` on the provider.
-- `foundry_toolbox` resource (preview) for managing a named toolbox, the single owner of its immutable version chain and `default_version` pointer, bundling tools and skill references behind one MCP endpoint. Requires `enable_preview = ["toolboxes"]` on the provider.
-- `foundry_toolbox` data source (preview) for looking up a specific toolbox version's tool and skill configuration by name and version. Requires `enable_preview = ["toolboxes"]` on the provider.
+- `foundry_toolbox` resource for managing a named toolbox, the single owner of its immutable version chain and `default_version` pointer, bundling tools and skill references behind one MCP endpoint.
+- `foundry_toolbox` data source for looking up a specific toolbox version's tool and skill configuration by name and version.
 - `foundry_evaluator_version` resource (preview) for managing an immutable evaluator version (prompt, code, rubric, or endpoint definition) used by evaluations. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluator_version` data source (preview) for looking up a specific evaluator version by name and version. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation_taxonomy` resource (preview) for managing an agent risk taxonomy; categories and subcategories are auto-derived by the service from the selected risk categories and modeled as a computed, order-preserving list. Requires `enable_preview = ["evaluations"]` on the provider.
@@ -45,18 +45,21 @@ This file records user-visible changes to the provider.
 - `foundry_evaluation_rule` resource (preview) for managing a rule that starts a continuous evaluation run against a `foundry_evaluation` when an agent event occurs; evaluation execution itself is left outside Terraform. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation_rule` data source (preview) for looking up an existing evaluation rule by ID. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_connection` data source for looking up a single connection on the account or project by name, for referencing an existing connection from a tool or index. Connections are created through Azure Resource Manager; the Foundry data plane exposes them read-only.
-- Typed `tools` blocks on the `foundry_toolbox` resource, covering every tool type the service accepts, with per-type argument validation during `terraform validate` and `terraform plan`.
+- Typed `tools` blocks on the `foundry_toolbox` resource, covering its supported tool types, with per-type argument validation during `terraform validate` and `terraform plan`.
 - `toolbox_tools` preview feature gating the preview tool types available in a toolbox's `tools` block.
 - A warning on every plan naming each preview feature and preview tool type in use, so the exemption from compatibility guarantees stays visible for as long as a preview feature is configured.
-- `foundry_model_version` resource for uploading a custom model artifact and registering it as a model version, including `LoRA` adapters. The artifact is uploaded to service-managed storage through the pending-upload handshake, because the model registry only issues a container SAS for storage it manages and rejects a practitioner's own blob URI.
-- `foundry_model_version` data source for looking up an existing model version by name and version.
+- `foundry_model_version` resource (preview) for uploading a custom model artifact and registering it as a model version, including `LoRA` adapters. The artifact is uploaded to service-managed storage through the pending-upload handshake, because the model registry only issues a container SAS for storage it manages and rejects a practitioner's own blob URI. Requires `enable_preview = ["models"]` on the provider.
+- `foundry_model_version` data source (preview) for looking up an existing model version by name and version. Requires `enable_preview = ["models"]` on the provider.
 - `foundry_files` data source for listing uploaded files, optionally filtered by purpose. Files are identified by a service-assigned ID rather than by name, so a list is the only way to reference a file the configuration did not upload.
 - `foundry_vector_stores` data source for listing vector stores, optionally filtered by name. Vector store names are not unique, so the result is a list rather than a single store.
 
 ### Changed
 
 - Agent resources now use the current v1 API definitions. Hosted agents use `container_configuration` and `protocol_versions`, external agents use `otel_agent_id`, and resources reject imported definitions or version metadata that an update would discard.
+- Prompt agents reject service definitions containing unsupported `harness` or `skills` fields, preventing an update from silently removing them.
 - Dataset, index, and memory-store resources now use the current v1 wire fields. Create-only dataset and Azure Search fields force replacement, index field mappings are preserved, unsupported index and memory-store kinds are rejected, and mutable metadata can be cleared.
+- Routines and toolboxes use their current v1 routes without obsolete resource-level preview gates. Preview toolbox tool types remain gated through `toolbox_tools`.
+- Toolbox tools support `web_iq_preview`. A toolbox containing the newer `shell` tool is rejected during read until its nested environment can be represented without data loss.
 - The `foundry_toolbox` resource replaces the `tools_json` argument with repeatable typed `tools` blocks. A configuration using `tools_json` must be rewritten; each element of the previous JSON array becomes one `tools` block with the same keys as arguments. The `foundry_toolbox` data source keeps `tools_json` as a computed attribute.
 
 ### Fixed

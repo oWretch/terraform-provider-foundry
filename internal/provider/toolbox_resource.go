@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -15,11 +16,6 @@ import (
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
 
-const toolboxesFeature = "Toolboxes"
-
-// toolboxesFeatureName is the enable_preview value users write to opt in.
-const toolboxesFeatureName = "toolboxes"
-
 var (
 	_ resource.Resource                   = &toolboxResource{}
 	_ resource.ResourceWithConfigure      = &toolboxResource{}
@@ -28,7 +24,7 @@ var (
 )
 
 func NewToolboxResource() resource.Resource {
-	return &toolboxResource{previewGate: previewGate{feature: toolboxesFeature, name: toolboxesFeatureName}}
+	return &toolboxResource{}
 }
 
 // toolboxResource is the single owner of a named toolbox's version chain.
@@ -38,7 +34,7 @@ func NewToolboxResource() resource.Resource {
 // toolbox versions do not auto-promote. This mirrors how agent_common.go's
 // agents publish immutable versions via POST .../versions on update.
 type toolboxResource struct {
-	previewGate
+	client *clients.Client
 }
 
 type toolboxSkillReferenceModel struct {
@@ -128,8 +124,7 @@ func (r *toolboxResource) Metadata(_ context.Context, req resource.MetadataReque
 
 func (r *toolboxResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "~> **Preview:** This resource requires `\"toolboxes\"` in the provider's `enable_preview` attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.\n\n" +
-			"Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing `tools`, `skills`, or `description` publishes a new immutable toolbox version and promotes it to the toolbox's default version.",
+		MarkdownDescription: "Manages a Foundry toolbox, the single owner of a named, versioned bundle of tools exposed through a single MCP endpoint. Changing `tools`, `skills`, or `description` publishes a new immutable toolbox version and promotes it to the toolbox's default version.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -179,21 +174,15 @@ func (r *toolboxResource) Configure(_ context.Context, req resource.ConfigureReq
 	r.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
-// ValidateConfig delegates to previewGate. Go's embedding does not promote
-// previewGate.ValidateResourceConfig to satisfy resource.ResourceWithValidateConfig
-// on *toolboxResource automatically, so this thin wrapper keeps the
-// interface satisfied explicitly.
 func (r *toolboxResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	r.ValidateResourceConfig(ctx, req, resp)
-
 	var config toolboxModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	// client is nil during an unconfigured `terraform validate`; assume the
-	// opt-in is present so that validation reports genuine schema problems
-	// rather than a preview error the practitioner cannot act on yet.
+	// preview tool opt-in is present so validation can still report schema
+	// problems that do not depend on provider configuration.
 	previewEnabled := r.client == nil || r.client.PreviewEnabled(toolboxToolsPreviewFeatureName)
 	validateTools(config.Tools, previewEnabled, &resp.Diagnostics)
 	warnPreviewTools(config.Tools, &resp.Diagnostics)
@@ -229,14 +218,8 @@ func (r *toolboxResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	previewCtx, err := r.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to read toolbox", err.Error())
-		return
-	}
-
 	var toolbox toolboxResponse
-	err = r.client.JSON(previewCtx, http.MethodGet, parentPath("toolboxes", state.Name.ValueString()), nil, &toolbox)
+	err := r.client.JSON(ctx, http.MethodGet, parentPath("toolboxes", state.Name.ValueString()), nil, &toolbox)
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
@@ -247,13 +230,20 @@ func (r *toolboxResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	var version toolboxVersionResponse
-	err = r.client.JSON(previewCtx, http.MethodGet, versionPath("toolboxes", state.Name.ValueString(), toolbox.DefaultVersion), nil, &version)
+	err = r.client.JSON(ctx, http.MethodGet, versionPath("toolboxes", state.Name.ValueString(), toolbox.DefaultVersion), nil, &version)
 	if clients.IsNotFound(err) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read toolbox version", err.Error())
+		return
+	}
+	if unsupported := unsupportedToolTypes(version.Tools); len(unsupported) > 0 {
+		resp.Diagnostics.AddError(
+			"Unsupported toolbox tool type",
+			"The service returned unsupported tool types ("+strings.Join(unsupported, ", ")+"). Remove them before managing this toolbox because an update would otherwise discard their configuration.",
+		)
 		return
 	}
 
@@ -282,7 +272,7 @@ func (r *toolboxResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	// Unlike the first version of a new toolbox, later versions don't
 	// auto-promote, so explicitly point default_version at the new version.
-	if err := promoteDefaultVersion(ctx, r.previewGate, "toolboxes", plan.Name.ValueString(), version.Version, http.MethodPatch); err != nil {
+	if err := promoteDefaultVersion(ctx, r.client, "toolboxes", plan.Name.ValueString(), version.Version, http.MethodPatch); err != nil {
 		resp.Diagnostics.AddError("Unable to promote new toolbox version to default", err.Error())
 		return
 	}
@@ -296,7 +286,7 @@ func (r *toolboxResource) Delete(ctx context.Context, req resource.DeleteRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := deleteParent(ctx, r.previewGate, "toolboxes", state.Name.ValueString()); err != nil {
+	if err := deleteParent(ctx, r.client, "toolboxes", state.Name.ValueString()); err != nil {
 		resp.Diagnostics.AddError("Unable to delete toolbox", err.Error())
 	}
 }
@@ -308,18 +298,13 @@ func (r *toolboxResource) ImportState(ctx context.Context, req resource.ImportSt
 // createVersion publishes a new toolbox version from the plan's tools and
 // skill references.
 func (r *toolboxResource) createVersion(ctx context.Context, plan toolboxModel, diagnostics *diag.Diagnostics) (toolboxVersionResponse, error) {
-	ctx, err := r.previewContext(ctx)
-	if err != nil {
-		return toolboxVersionResponse{}, err
-	}
-
 	tools := expandTools(ctx, plan.Tools, diagnostics)
 	if diagnostics.HasError() {
 		return toolboxVersionResponse{}, nil
 	}
 
 	var version toolboxVersionResponse
-	err = r.client.JSON(ctx, http.MethodPost, versionsPath("toolboxes", plan.Name.ValueString()), toolboxVersionRequest{
+	err := r.client.JSON(ctx, http.MethodPost, versionsPath("toolboxes", plan.Name.ValueString()), toolboxVersionRequest{
 		Description: plan.Description.ValueString(),
 		Tools:       tools,
 		Skills:      plan.skillReferences(),

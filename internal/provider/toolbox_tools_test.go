@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -57,6 +58,9 @@ func TestValidateToolsRequiredFields(t *testing.T) {
 		"work iq without connection": {
 			tool: toolOf(toolTypeWorkIQPreview), wantErr: "project_connection_id",
 		},
+		"web iq without connection": {
+			tool: toolOf(toolTypeWebIQPreview), wantErr: "project_connection_id",
+		},
 	}
 
 	for name, testCase := range cases {
@@ -68,6 +72,42 @@ func TestValidateToolsRequiredFields(t *testing.T) {
 				t.Errorf("expected an error mentioning %q, got %q", testCase.wantErr, errorSummaries(diagnostics))
 			}
 		})
+	}
+}
+
+func TestUnsupportedToolTypes(t *testing.T) {
+	t.Parallel()
+
+	got := unsupportedToolTypes([]toolRequest{
+		{Type: toolTypeWebIQPreview},
+		{Type: "shell"},
+		{Type: "future_tool"},
+		{Type: "shell"},
+	})
+	want := []string{"future_tool", "shell"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unsupportedToolTypes() = %v, want %v", got, want)
+	}
+}
+
+func TestFlattenWebIQPreservesUnsetDefaults(t *testing.T) {
+	t.Parallel()
+
+	previous := toolOf(toolTypeWebIQPreview)
+	previous.ProjectConnectionID = types.StringValue("web-iq-connection")
+
+	tools := flattenTools([]toolRequest{{
+		Type:                toolTypeWebIQPreview,
+		ProjectConnectionID: "web-iq-connection",
+		ServerLabel:         "derived-label",
+		RequireApproval:     "always",
+	}}, []toolModel{previous})
+
+	if !tools[0].ServerLabel.IsNull() {
+		t.Errorf("derived server_label should remain null, got %q", tools[0].ServerLabel.ValueString())
+	}
+	if !tools[0].RequireApproval.IsNull() {
+		t.Errorf("default require_approval should remain null, got %q", tools[0].RequireApproval.ValueString())
 	}
 }
 

@@ -11,6 +11,8 @@ This repository contains a Terraform provider for the current Microsoft Foundry 
 - `foundry_vector_store_file` — a file attached to a vector store.
 - `foundry_dataset` — a dataset version registered from a blob file or folder.
 - `foundry_index` — an Azure AI Search-backed index version.
+- `foundry_routine` — a triggered routine that invokes an agent.
+- `foundry_toolbox` — a versioned toolbox and its default version pointer.
 
 ### Preview resources
 
@@ -19,9 +21,8 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 - `foundry_external_agent` — an agent hosted outside Foundry, registered for observability (`external_agents`).
 - `foundry_memory_store` — a memory store backing agent recall (`memory_stores`).
 - `foundry_skill` — a versioned skill and its default version pointer (`skills`).
-- `foundry_toolbox` — a versioned toolbox and its default version pointer (`toolboxes`).
-- `foundry_routine` — a triggered routine that invokes an agent (`routines`).
 - `foundry_schedule` — a schedule that runs an evaluation or insight task (`schedules`).
+- `foundry_model_version` — a custom model artifact registered as a model version (`models`).
 - `foundry_evaluator_version` — a code, prompt, rubric, or endpoint evaluator version (`evaluations`).
 - `foundry_evaluation_taxonomy` — an evaluation taxonomy and its risk categories (`evaluations`).
 - `foundry_evaluation` — an evaluation definition and its testing criteria (`evaluations`).
@@ -34,13 +35,16 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 - `foundry_prompt_agent`, `foundry_hosted_agent` — read the latest version of an agent by name.
 - `foundry_dataset` — read a dataset by name and optional version; omitting the version resolves the service's current latest version.
 - `foundry_index` — read an Azure AI Search-backed index by name and optional version; omitting the version resolves the service's current latest version.
+- `foundry_routine` — read an existing routine.
+- `foundry_toolbox` — read a specific toolbox version.
 
 ### Preview data sources
 
-- `foundry_skill`, `foundry_toolbox` — read a specific skill or toolbox version (`skills`, `toolboxes`).
+- `foundry_skill` — read a specific skill version (`skills`).
 - `foundry_memory_store` — read the current memory store object by name (`memory_stores`).
 - `foundry_external_agent` — read the latest external agent version by name (`external_agents`).
-- `foundry_routine`, `foundry_schedule` — read an existing routine or schedule (`routines`, `schedules`).
+- `foundry_schedule` — read an existing schedule (`schedules`).
+- `foundry_model_version` — read an existing model version (`models`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
 The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.25.13 or later.
@@ -138,10 +142,9 @@ Opt-in is per feature, so enabling one preview family does not enable the others
 | `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
 | `external_agents` | `foundry_external_agent` |
 | `memory_stores` | `foundry_memory_store` |
-| `routines` | `foundry_routine` |
+| `models` | `foundry_model_version` |
 | `schedules` | `foundry_schedule` |
 | `skills` | `foundry_skill` |
-| `toolboxes` | `foundry_toolbox` |
 | `toolbox_tools` | Preview tool types in the `tools` block of `foundry_toolbox` |
 
 Preview tool types are named by the service with a `_preview` suffix, such as `fabric_iq_preview`. The suffix is part of the tool type, not a modifier the provider adds, and a preview type is not interchangeable with its non-preview counterpart: `a2a` and `a2a_preview` coexist and take different arguments. When a tool type reaches general availability the service publishes it under a new name, so configurations using the preview name must be updated at that point. Each preview tool in use is reported as a warning on every plan.
@@ -154,7 +157,16 @@ The provider targets the current Foundry project API. It does not support the de
 
 ## Releases
 
-Pushing a semantic version tag such as `v0.1.0` automatically publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance. The protected `release` environment must provide `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` secrets; the workflow derives the key fingerprint after importing the key. Terraform Registry registration remains a separate repository-owner step.
+Pushing a semantic version tag such as `v0.1.0` publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance.
+
+Before the first tag:
+
+1. Add the ASCII-armored public GPG key to the Terraform Registry account that will publish the provider.
+2. Create a protected GitHub environment named `release`.
+3. Add the ASCII-armored private key as the `GPG_PRIVATE_KEY` environment secret and its passphrase as `GPG_PASSPHRASE`.
+4. Register `oWretch/foundry` in the Terraform Registry and connect it to this repository.
+
+The workflow imports the private key, passes its fingerprint to GoReleaser, and signs the checksum file. Keep the private key in the protected environment only. The public key registered with the Terraform Registry must match it.
 
 ## License
 

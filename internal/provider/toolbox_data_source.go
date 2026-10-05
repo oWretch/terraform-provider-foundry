@@ -13,13 +13,12 @@ import (
 )
 
 var (
-	_ datasource.DataSource                   = &toolboxDataSource{}
-	_ datasource.DataSourceWithConfigure      = &toolboxDataSource{}
-	_ datasource.DataSourceWithValidateConfig = &toolboxDataSource{}
+	_ datasource.DataSource              = &toolboxDataSource{}
+	_ datasource.DataSourceWithConfigure = &toolboxDataSource{}
 )
 
 func NewToolboxDataSource() datasource.DataSource {
-	return &toolboxDataSource{previewGate: previewGate{feature: toolboxesFeature, name: toolboxesFeatureName}}
+	return &toolboxDataSource{}
 }
 
 // toolboxDataSource is a read-only lookup of a single toolbox version's
@@ -27,7 +26,7 @@ func NewToolboxDataSource() datasource.DataSource {
 // only reads, so it cannot race with the resource for ownership of the
 // version chain.
 type toolboxDataSource struct {
-	previewGate
+	client *clients.Client
 }
 
 type toolboxDataSourceModel struct {
@@ -45,8 +44,7 @@ func (d *toolboxDataSource) Metadata(_ context.Context, req datasource.MetadataR
 
 func (d *toolboxDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "~> **Preview:** This data source requires `\"toolboxes\"` in the provider's `enable_preview` attribute. Preview features may change their inputs, outputs, or behavior in any provider release without following semantic versioning.\n\n" +
-			"Looks up a single version of a Foundry toolbox. Use this to reference an existing toolbox version's tool and skill configuration.",
+		MarkdownDescription: "Looks up a single version of a Foundry toolbox. Use this to reference an existing toolbox version's tool and skill configuration.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -93,15 +91,6 @@ func (d *toolboxDataSource) Configure(_ context.Context, req datasource.Configur
 	d.client = clientFromProviderData(req.ProviderData, &resp.Diagnostics)
 }
 
-// ValidateConfig delegates to previewGate. Go's embedding does not promote
-// previewGate.ValidateDataSourceConfig to satisfy
-// datasource.DataSourceWithValidateConfig on *toolboxDataSource
-// automatically, so this thin wrapper keeps the interface satisfied
-// explicitly.
-func (d *toolboxDataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
-	d.ValidateDataSourceConfig(ctx, req, resp)
-}
-
 func (d *toolboxDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config toolboxDataSourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
@@ -109,14 +98,8 @@ func (d *toolboxDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	previewCtx, err := d.previewContext(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to read toolbox version", err.Error())
-		return
-	}
-
 	var version toolboxVersionResponse
-	err = d.client.JSON(previewCtx, http.MethodGet, versionPath("toolboxes", config.Name.ValueString(), config.Version.ValueString()), nil, &version)
+	err := d.client.JSON(ctx, http.MethodGet, versionPath("toolboxes", config.Name.ValueString(), config.Version.ValueString()), nil, &version)
 	if clients.IsNotFound(err) {
 		resp.Diagnostics.AddError("Toolbox version not found", "No toolbox version matched the given name and version.")
 		return
