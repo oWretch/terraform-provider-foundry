@@ -33,7 +33,13 @@ Use `git commit -s` to add the sign-off automatically. By signing off, you certi
 
 ## Protected automation
 
-Azure acceptance tests run with `TF_ACC=1` in the `foundry-ci` environment for same-repository pull requests, `main`, scheduled runs, and manual runs. Fork pull requests never receive Azure credentials or run Azure login. Configure these environment variables:
+Azure acceptance tests run with `TF_ACC=1` in the `foundry-ci` environment for pull requests, `main`, scheduled runs, and manual runs. Same-repository PRs use the `pull_request` workflow. Fork PRs use a separate `pull_request_target` workflow defined on the base branch. Both call the shared acceptance runner and publish the `azure-acceptance` status on the exact tested commit. Standard offline CI still runs on `pull_request` for both kinds of PR.
+
+Before approving a fork run, review its exact head commit, including tests, scripts, build files, and dependencies. Approval lets that code execute with Azure credentials. Every new PR commit starts a new run that needs approval; a previous approval does not authorize later commits. Do not approve untrusted code. Use a dedicated Azure test account and limit the federated identity's permissions to test resources.
+
+The test job checks out the immutable head SHA without retaining GitHub credentials and does not restore or save Go caches. Separate jobs publish the pending and final statuses without checking out PR code or receiving Azure credentials. The test job has no status-write permission. Failed, skipped, or cancelled tests do not satisfy the required status; if a run is cancelled before reporting, its pending status also blocks merging. Only one test job runs at a time, and a job waiting for approval holds that slot. Approve or reject waiting runs promptly; a newer queued job replaces an older one, which then reports an error and must be re-run.
+
+Configure these environment variables:
 
 - Required OIDC values: `ARM_CLIENT_ID`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`.
 - Required target values: `FOUNDRY_ACCOUNT_NAME`, `FOUNDRY_PROJECT_NAME`, `FOUNDRY_TEST_CHAT_MODEL_NAME`, and `FOUNDRY_TEST_EMBEDDING_MODEL_NAME`.
@@ -47,6 +53,8 @@ For the index fixture, create an Azure AI Search service and an index before run
 The federated identity needs the Foundry User role on the target account. No client secret is used.
 Configure its GitHub OIDC credential with audience `api://AzureADTokenExchange` and subject `repo:oWretch/terraform-provider-foundry:environment:foundry-ci`.
 The `foundry-ci` environment requires maintainer approval for every acceptance run, including scheduled runs and pushes to `main`.
+
+The default-branch ruleset requires `azure-acceptance` from GitHub Actions alongside the offline CI checks, rather than a `foundry-ci` deployment. This gives fork and same-repository PRs the same merge requirements. Keep the approval gate enabled; the privileged fork workflow must never execute PR code before approval.
 
 Tag pushes matching `v*` start the Release workflow. Tags must use `vMAJOR.MINOR.PATCH`, optionally followed by a SemVer prerelease suffix such as `-alpha.1`, `-beta.2`, or `-rc.1`. Numeric version components and numeric prerelease identifiers must not have leading zeroes. Build metadata (`+...`) is not allowed. Validation runs before the workflow requests access to the `release` environment; invalid tags cannot publish through this workflow. GoReleaser publishes valid tags as signed, non-draft GitHub releases and automatically marks prerelease versions as prereleases.
 

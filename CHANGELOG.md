@@ -55,6 +55,7 @@ This file records user-visible changes to the provider.
 
 ### Changed
 
+- Fork pull requests can run Azure acceptance tests after maintainer approval of the exact commit. Fork and same-repository PRs report the same `azure-acceptance` status, with status-write permissions isolated from the test job.
 - The minimum Go version is 1.26.9, matching the requirements of the linter and patched HTTP/2 dependency. Terraform and OpenTofu still require 1.11 or later.
 - Release tag validation requires `vMAJOR.MINOR.PATCH` with an optional SemVer prerelease suffix before requesting the signing environment. Leading zeroes in numeric identifiers and build metadata are rejected; manual snapshot builds are unchanged.
 - Agent resources now use the current v1 API definitions. Hosted agents use `container_configuration` and `protocol_versions`, external agents use `otel_agent_id`, and resources reject imported definitions or version metadata that an update would discard.

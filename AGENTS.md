@@ -60,7 +60,7 @@ Unit tests must stay offline and deterministic. Provider configuration tests cov
 
 Use injected transports for HTTP tests. Do not commit recorded credentials, tenant endpoints, state files, generated binaries, or acceptance-test artifacts.
 
-Credentialed acceptance tests belong in protected workflows and must use `TF_ACC=1`. Do not run them in pull requests from untrusted forks.
+Credentialed acceptance tests belong in protected workflows and must use `TF_ACC=1`. Fork PRs may run them only after a maintainer reviews the exact head commit and approves the `foundry-ci` environment. Keep status-write tokens in separate jobs that never check out PR code; the test job must not persist GitHub credentials or use shared caches.
 
 ## Documentation
 

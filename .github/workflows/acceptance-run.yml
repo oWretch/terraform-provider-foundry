@@ -1,0 +1,132 @@
+name: Azure acceptance runner
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: Repository containing the reviewed commit
+        required: true
+        type: string
+      commit_sha:
+        description: Exact reviewed commit to test and report against
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  pending:
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Mark acceptance status pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api --method POST "repos/$GH_REPO/statuses/$COMMIT_SHA" \
+            -f state=pending \
+            -f context=azure-acceptance \
+            -f description="Waiting for approval or acceptance tests" \
+            -f target_url="$RUN_URL"
+
+  acceptance:
+    needs: pending
+    runs-on: ubuntu-latest
+    environment: foundry-ci
+    # Shared Azure fixtures allow one test run at a time. GitHub keeps only the
+    # newest queued job, so superseded jobs report an error status.
+    concurrency:
+      group: foundry-acceptance
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+      ARM_USE_CLI: "true"
+      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
+      FOUNDRY_ENVIRONMENT: public
+      FOUNDRY_PROJECT_NAME: ${{ vars.FOUNDRY_PROJECT_NAME }}
+      FOUNDRY_TEST_CHAT_MODEL_NAME: ${{ vars.FOUNDRY_TEST_CHAT_MODEL_NAME }}
+      FOUNDRY_TEST_DATA_URI: ${{ vars.FOUNDRY_TEST_DATA_URI }}
+      FOUNDRY_TEST_EMBEDDING_MODEL_NAME: ${{ vars.FOUNDRY_TEST_EMBEDDING_MODEL_NAME }}
+      FOUNDRY_TEST_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      FOUNDRY_TEST_SEARCH_CONNECTION_NAME: ${{ vars.FOUNDRY_TEST_SEARCH_CONNECTION_NAME }}
+      FOUNDRY_TEST_SEARCH_INDEX_NAME: ${{ vars.FOUNDRY_TEST_SEARCH_INDEX_NAME }}
+      FOUNDRY_TEST_STORAGE_CONNECTION_NAME: ${{ vars.FOUNDRY_TEST_STORAGE_CONNECTION_NAME }}
+      TF_ACC: "1"
+    steps:
+      - name: Check environment configuration
+        run: |
+          : "${ARM_CLIENT_ID:?configure ARM_CLIENT_ID in foundry-ci}"
+          : "${ARM_SUBSCRIPTION_ID:?configure ARM_SUBSCRIPTION_ID in foundry-ci}"
+          : "${ARM_TENANT_ID:?configure ARM_TENANT_ID in foundry-ci}"
+          : "${FOUNDRY_ACCOUNT_NAME:?configure FOUNDRY_ACCOUNT_NAME in foundry-ci}"
+          : "${FOUNDRY_PROJECT_NAME:?configure FOUNDRY_PROJECT_NAME in foundry-ci}"
+          : "${FOUNDRY_TEST_CHAT_MODEL_NAME:?configure FOUNDRY_TEST_CHAT_MODEL_NAME in foundry-ci}"
+          : "${FOUNDRY_TEST_EMBEDDING_MODEL_NAME:?configure FOUNDRY_TEST_EMBEDDING_MODEL_NAME in foundry-ci}"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.11.0
+          terraform_wrapper: false
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          environment: azurecloud
+      - name: Run acceptance tests
+        env:
+          # azure/login has already authenticated the CLI. Clear values that the
+          # provider correctly treats as a separate service-principal mode.
+          ARM_CLIENT_ID: ""
+          ARM_TENANT_ID: ""
+        run: ./scripts/acceptance-test.sh
+
+  report:
+    if: always() && needs.pending.result == 'success'
+    needs:
+      - pending
+      - acceptance
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Report acceptance result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RESULT: ${{ needs.acceptance.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT" in
+            success) state=success ;;
+            cancelled) state=error ;;
+            failure|skipped) state=failure ;;
+            *) echo "::error::Unexpected acceptance result: $RESULT"; exit 1 ;;
+          esac
+          gh api --method POST "repos/$GH_REPO/statuses/$COMMIT_SHA" \
+            -f state="$state" \
+            -f context=azure-acceptance \
+            -f description="Acceptance tests: $RESULT" \
+            -f target_url="$RUN_URL"
+          if [[ "$RESULT" != "success" ]]; then
+            exit 1
+          fi
