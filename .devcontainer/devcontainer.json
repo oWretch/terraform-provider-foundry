@@ -1,14 +1,6 @@
 {
   "name": "terraform-provider-foundry",
   "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
-  "hostRequirements": {
-    "cpus": 2,
-    "memory": "3gb"
-  },
-  "runArgs": [
-    "--cpus=2",
-    "--memory=3g"
-  ],
   "features": {
     "ghcr.io/devcontainers/features/terraform:1": {
       "version": "1.16.0",
@@ -29,6 +21,5 @@
       ]
     }
   },
-  "postCreateCommand": "go mod download && make tools",
-  "remoteUser": "vscode"
+  "postCreateCommand": "go mod download && make tools"
 }
