@@ -47,7 +47,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 - `foundry_model_version` — read an existing model version (`models`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
 
-The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.25.13 or later.
+The provider uses Terraform Plugin Protocol 6 and requires Terraform or OpenTofu 1.11 or later. The Go module requires Go 1.26.9 or later.
 
 ## Development
 
@@ -157,7 +157,9 @@ The provider targets the current Foundry project API. It does not support the de
 
 ## Releases
 
-Pushing a semantic version tag such as `v0.1.0` publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance.
+Pushing a tag in the format `vMAJOR.MINOR.PATCH`, such as `v0.1.0`, publishes a signed, non-draft GitHub release with checksums, the Terraform Registry manifest, and build provenance. Tags can include a SemVer prerelease suffix, such as `v0.1.0-rc.1`; GoReleaser marks those GitHub releases as prereleases. Release tags must not contain leading zeroes in numeric version components or numeric prerelease identifiers, or build metadata (`+...`).
+
+The Release workflow validates the tag before requesting access to the signing environment. Repository tag rulesets reject tags that do not start with `vX.Y.Z` and prevent updates and deletion of existing tags.
 
 Before the first tag:
 

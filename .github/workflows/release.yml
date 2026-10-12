@@ -10,7 +10,24 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "Manual run: building a snapshot without publishing."
+            exit 0
+          fi
+          tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ $tag_pattern ]]; then
+            echo "::error::Release tags must use vMAJOR.MINOR.PATCH with an optional SemVer prerelease (for example, v1.2.3-rc.1), without leading zeroes or build metadata."
+            exit 1
+          fi
+
   release:
+    needs: validate
     runs-on: ubuntu-latest
     environment: release
     permissions:

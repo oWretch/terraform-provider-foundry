@@ -1,6 +1,6 @@
 {
   "name": "terraform-provider-foundry",
-  "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/go:1.26-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/terraform:1": {
       "version": "1.16.0",

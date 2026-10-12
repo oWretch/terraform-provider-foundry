@@ -55,6 +55,8 @@ This file records user-visible changes to the provider.
 
 ### Changed
 
+- The minimum Go version is 1.26.9, matching the requirements of the linter and patched HTTP/2 dependency. Terraform and OpenTofu still require 1.11 or later.
+- Release tag validation requires `vMAJOR.MINOR.PATCH` with an optional SemVer prerelease suffix before requesting the signing environment. Leading zeroes in numeric identifiers and build metadata are rejected; manual snapshot builds are unchanged.
 - Agent resources now use the current v1 API definitions. Hosted agents use `container_configuration` and `protocol_versions`, external agents use `otel_agent_id`, and resources reject imported definitions or version metadata that an update would discard.
 - Prompt agents reject service definitions containing unsupported `harness` or `skills` fields, preventing an update from silently removing them.
 - Dataset, index, and memory-store resources now use the current v1 wire fields. Create-only dataset and Azure Search fields force replacement, index field mappings are preserved, unsupported index and memory-store kinds are rejected, and mutable metadata can be cleared.
@@ -64,6 +66,7 @@ This file records user-visible changes to the provider.
 
 ### Fixed
 
+- Updated `golang.org/x/net` to v0.60.0 to fix the five HTTP/2 vulnerabilities reported by CI.
 - Generated `foundry_index` resource and data source documentation passes Terraform Registry format validation. PR checks now generate and validate documentation through `make docs` and `make check`.
 - The `foundry_index` resource includes the Azure AI Search connection, index name, and field mapping when updating mutable metadata, as required by the service.
 - The `foundry_file` resource no longer plans a replacement after an import. `source_path` is now optional, because the service cannot report the local path an imported file came from, and `purpose` is now read back from the service instead of relying on the configuration. Uploading still requires both, and a create without them fails with an explanatory error.

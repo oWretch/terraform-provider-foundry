@@ -2,7 +2,7 @@
 
 ## Development setup
 
-Install Go 1.25.13 or later, Terraform 1.11 or later, and optionally OpenTofu 1.11 or later.
+Install Go 1.26.9 or later, Terraform 1.11 or later, and optionally OpenTofu 1.11 or later.
 
 ```shell
 go mod download
@@ -47,6 +47,10 @@ For the index fixture, create an Azure AI Search service and an index before run
 The federated identity needs the Foundry User role on the target account. No client secret is used.
 Configure its GitHub OIDC credential with audience `api://AzureADTokenExchange` and subject `repo:oWretch/terraform-provider-foundry:environment:foundry-ci`.
 
-Tag pushes matching `v*` publish a signed, non-draft GitHub release through the protected `release` environment. The workflow loads the signing key from 1Password with a service account, so store its token as the `OP_SERVICE_ACCOUNT_TOKEN` environment secret and require approval for that environment. The service account needs read access to `op://terraform-provider-foundry/signing-private-key/signing-private-key.asc`, which holds the ASCII-armored RSA private key without a passphrase. GoReleaser signs the release checksum file, not each provider binary; Terraform verifies the checksum signature and then verifies downloaded archives against those checksums. Register the matching public key with the Terraform Registry during provider onboarding, and keep the private key restricted to the protected release environment.
+Tag pushes matching `v*` start the Release workflow. Tags must use `vMAJOR.MINOR.PATCH`, optionally followed by a SemVer prerelease suffix such as `-alpha.1`, `-beta.2`, or `-rc.1`. Numeric version components and numeric prerelease identifiers must not have leading zeroes. Build metadata (`+...`) is not allowed. Validation runs before the workflow requests access to the `release` environment; invalid tags cannot publish through this workflow. GoReleaser publishes valid tags as signed, non-draft GitHub releases and automatically marks prerelease versions as prereleases.
+
+Two tag rulesets apply, both without bypass actors. `Release tag format` blocks creation of any tag that does not match `v[0-9]*.[0-9]*.[0-9]*`, so `v1.2.3` and `v1.2.3-rc.1` are accepted and names such as `1.2.3` or `v1.2` are rejected. GitHub's regex tag-name rule is unavailable for user-owned repositories, and the glob is coarser than SemVer, so the Release workflow applies the exact check. `Immutable provider tags` prevents updates and deletion of all tags. Check the version before pushing a tag; correcting a mistaken tag requires an administrator to change the ruleset.
+
+The workflow loads the signing key from 1Password with a service account, so store its token as the `OP_SERVICE_ACCOUNT_TOKEN` environment secret and require approval for that environment. The service account needs read access to `op://terraform-provider-foundry/signing-private-key/signing-private-key.asc`, which holds the ASCII-armored RSA private key without a passphrase. GoReleaser signs the release checksum file, not each provider binary; Terraform verifies the checksum signature and then verifies downloaded archives against those checksums. Register the matching public key with the Terraform Registry during provider onboarding, and keep the private key restricted to the protected release environment.
 
 To test packaging and signing without publishing, run the Release workflow manually from `main`. It builds a GoReleaser snapshot, signs the checksum file with the 1Password key, verifies the signature and checksums, and uploads the files as the `release-dry-run` workflow artifact. It does not create a tag, a GitHub release, or provenance attestations.
