@@ -163,10 +163,11 @@ Before the first tag:
 
 1. Add the ASCII-armored public GPG key to the Terraform Registry account that will publish the provider.
 2. Create a protected GitHub environment named `release`.
-3. Add the ASCII-armored private key as the `GPG_PRIVATE_KEY` environment secret and its passphrase as `GPG_PASSPHRASE`.
-4. Register `oWretch/foundry` in the Terraform Registry and connect it to this repository.
+3. Store the ASCII-armored RSA private key, without a passphrase, at `op://terraform-provider-foundry/signing-private-key/signing-private-key.asc` in 1Password.
+4. Add a 1Password service account token with read access to that item as the `OP_SERVICE_ACCOUNT_TOKEN` environment secret.
+5. Register `oWretch/foundry` in the Terraform Registry and connect it to this repository.
 
-The workflow imports the private key, passes its fingerprint to GoReleaser, and signs the checksum file. Keep the private key in the protected environment only. The public key registered with the Terraform Registry must match it.
+The workflow loads the private key from 1Password, imports it, passes its fingerprint to GoReleaser, and signs the checksum file. The public key registered with the Terraform Registry must match it.
 
 ## License
 
