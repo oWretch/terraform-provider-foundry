@@ -29,7 +29,7 @@ make docs
 make check
 ```
 
-`make check` is the full offline validation path. It formats code, runs vet and lint, executes tests, builds the provider, regenerates docs, and validates examples with installed Terraform and OpenTofu CLIs.
+`make check` is the full offline validation path. It formats code, runs vet and lint, executes tests, builds the provider, regenerates and validates Registry docs, checks for stale or untracked generated pages, and validates examples with installed Terraform and OpenTofu CLIs.
 
 Run a focused Go test with:
 

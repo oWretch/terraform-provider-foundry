@@ -58,7 +58,7 @@ go mod download
 make check
 ```
 
-`make check` formats the Go code, runs vet and lint, executes unit tests, builds the provider, regenerates documentation, and validates the provider example. OpenTofu validation runs when `tofu` is installed.
+`make check` formats the Go code, runs vet and lint, executes unit tests, builds the provider, regenerates documentation, checks its Terraform Registry format and schema coverage, checks that generated pages are up to date and tracked, and validates the provider example. OpenTofu validation runs when `tofu` is installed. PR CI runs `make docs` and `make check` with both CLIs installed.
 
 To regenerate only the provider documentation:
 

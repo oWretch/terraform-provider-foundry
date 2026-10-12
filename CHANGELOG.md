@@ -64,6 +64,7 @@ This file records user-visible changes to the provider.
 
 ### Fixed
 
+- Generated `foundry_index` resource and data source documentation passes Terraform Registry format validation. PR checks now generate and validate documentation through `make docs` and `make check`.
 - The `foundry_index` resource includes the Azure AI Search connection, index name, and field mapping when updating mutable metadata, as required by the service.
 - The `foundry_file` resource no longer plans a replacement after an import. `source_path` is now optional, because the service cannot report the local path an imported file came from, and `purpose` is now read back from the service instead of relying on the configuration. Uploading still requires both, and a create without them fails with an explanatory error.
 

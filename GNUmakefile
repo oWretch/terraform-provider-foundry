@@ -28,7 +28,9 @@ docs:
 	go tool tfplugindocs generate --provider-name foundry
 
 docs-check: docs
+	go tool tfplugindocs validate --provider-name foundry
 	git diff --exit-code -- docs
+	@test -z "$$(git ls-files --others --exclude-standard -- docs)" || { echo "Untracked generated documentation in docs" >&2; exit 1; }
 
 examples:
 	./scripts/validate-example.sh terraform

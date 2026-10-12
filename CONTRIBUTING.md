@@ -15,9 +15,13 @@ Keep changes focused and add the smallest test that would fail without the chang
 
 Generated provider documentation lives in `docs`. Edit the provider schema, examples, or `templates`, then run `make docs`.
 
+`make check` regenerates the documentation, runs `tfplugindocs validate` to check Registry format and schema coverage, and rejects generated documentation that differs from the Git index or is untracked. Include regenerated pages in your change. The `foundry_index` resource and data source have dedicated templates that omit `subcategory`, because tfplugindocs v0.24.0 applies provider-index frontmatter rules to every file named `index.md`.
+
 ## Pull requests
 
 Pull requests should explain the problem, the chosen fix, and any user-facing effect. Complete the pull request checklist and keep credentialed acceptance tests out of untrusted workflows.
+
+PR CI runs `make docs` and `make check`, with both Terraform and OpenTofu installed. Separate matrix jobs also validate examples against the supported minimum and current CLI versions.
 
 All commits must include a Developer Certificate of Origin sign-off:
 

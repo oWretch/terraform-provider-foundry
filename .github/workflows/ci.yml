@@ -22,15 +22,15 @@ jobs:
         with:
           terraform_version: 1.11.0
           terraform_wrapper: false
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
-          version: v2.13.2
-      - run: go test ./...
-      - run: go build ./...
-      - run: go tool tfplugindocs generate --provider-name foundry
-      - run: git diff --exit-code -- docs
+          tofu_version: 1.11.0
+          tofu_wrapper: false
+      - run: test -z "$(gofmt -l .)"
+      - name: Generate Registry documentation
+        run: make docs
+      - name: Run offline checks and validate Registry documentation
+        run: make check
 
   govulncheck:
     runs-on: ubuntu-latest
