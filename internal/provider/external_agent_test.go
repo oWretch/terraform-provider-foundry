@@ -163,7 +163,7 @@ func TestExternalAgentDataSourcePreviewBehavior(t *testing.T) {
 	dataSource.client = enabled
 	var diagnostics diag.Diagnostics
 	var definition externalAgentDefinition
-	if _, ok := dataSource.read(context.Background(), "external-agent", &definition, &diagnostics); !ok || diagnostics.HasError() {
+	if _, _, ok := dataSource.read(context.Background(), "external-agent", types.StringNull(), &definition, &diagnostics); !ok || diagnostics.HasError() {
 		t.Fatalf("read diagnostics: %v", diagnostics)
 	}
 }

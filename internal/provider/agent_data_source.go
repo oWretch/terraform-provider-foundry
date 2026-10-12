@@ -2,10 +2,14 @@ package provider
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -33,16 +37,18 @@ type agentDataSource struct {
 }
 
 type agentDataSourceCommon struct {
-	Name        types.String `tfsdk:"name"`
-	ID          types.String `tfsdk:"id"`
-	Version     types.String `tfsdk:"version"`
-	Description types.String `tfsdk:"description"`
-	Metadata    types.Map    `tfsdk:"metadata"`
-	Status      types.String `tfsdk:"status"`
-	CreatedAt   types.Int64  `tfsdk:"created_at"`
-	AgentGUID   types.String `tfsdk:"agent_guid"`
-	PrincipalID types.String `tfsdk:"principal_id"`
-	ClientID    types.String `tfsdk:"client_id"`
+	Name          types.String `tfsdk:"name"`
+	ID            types.String `tfsdk:"id"`
+	Version       types.String `tfsdk:"version"`
+	ActiveVersion types.String `tfsdk:"active_version"`
+	AgentEndpoint types.Object `tfsdk:"agent_endpoint"`
+	Description   types.String `tfsdk:"description"`
+	Metadata      types.Map    `tfsdk:"metadata"`
+	Status        types.String `tfsdk:"status"`
+	CreatedAt     types.Int64  `tfsdk:"created_at"`
+	AgentGUID     types.String `tfsdk:"agent_guid"`
+	PrincipalID   types.String `tfsdk:"principal_id"`
+	ClientID      types.String `tfsdk:"client_id"`
 }
 
 type promptAgentDataSourceModel struct {
@@ -103,28 +109,50 @@ func agentDataSourceCommonSchema() map[string]schema.Attribute {
 		},
 		"id": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "Identifier of the latest agent version.",
+			MarkdownDescription: "Identifier of the selected agent version.",
 		},
 		"version": schema.StringAttribute{
+			Optional:            true,
 			Computed:            true,
-			MarkdownDescription: "Latest agent version.",
+			MarkdownDescription: "Agent version to look up. Omit to read the latest version, regardless of endpoint routing.",
+			Validators:          []validator.String{stringvalidator.LengthAtLeast(1)},
+		},
+		"active_version": schema.StringAttribute{
+			Computed:            true,
+			MarkdownDescription: "Version receiving all stable-endpoint traffic, independent of the selected definition version. Resolves `@latest` to the latest version number. Null when routing is absent, split across rules, or not a single 100% `FixedRatio` rule.",
+		},
+		"agent_endpoint": schema.SingleNestedAttribute{
+			Computed:            true,
+			MarkdownDescription: "The agent's stable-endpoint protocols and traffic routing, independent of the selected definition version.",
+			Attributes: map[string]schema.Attribute{
+				"protocols": schema.ListAttribute{Computed: true, ElementType: types.StringType, MarkdownDescription: "Protocols the endpoint serves."},
+				"version_selection_rules": schema.ListNestedAttribute{
+					Computed:            true,
+					MarkdownDescription: "All routing rules returned by the service, including their traffic percentages.",
+					NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+						"type":               schema.StringAttribute{Computed: true, MarkdownDescription: "Routing rule type, such as `FixedRatio`."},
+						"agent_version":      schema.StringAttribute{Computed: true, MarkdownDescription: "Target version or `@latest`."},
+						"traffic_percentage": schema.Int64Attribute{Computed: true, MarkdownDescription: "Percentage of traffic routed to this version."},
+					}},
+				},
+			},
 		},
 		"description": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "Description of the latest agent version.",
+			MarkdownDescription: "Description of the selected agent version.",
 		},
 		"metadata": schema.MapAttribute{
 			Computed:            true,
 			ElementType:         types.StringType,
-			MarkdownDescription: "Metadata attached to the latest agent version.",
+			MarkdownDescription: "Metadata attached to the selected agent version.",
 		},
 		"status": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "Provisioning status of the latest agent version.",
+			MarkdownDescription: "Provisioning status of the selected agent version.",
 		},
 		"created_at": schema.Int64Attribute{
 			Computed:            true,
-			MarkdownDescription: "Unix timestamp when the latest agent version was created.",
+			MarkdownDescription: "Unix timestamp when the selected agent version was created.",
 		},
 		"agent_guid": schema.StringAttribute{
 			Computed:            true,
@@ -175,7 +203,7 @@ func (d *agentDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 		attributes["rai_config"] = agentDataSourceRAIConfigSchema()
 	}
 
-	description := "Looks up the latest version of a " + d.kind + " agent by name."
+	description := "Looks up a " + d.kind + " agent by name and optional version. Omitting `version` reads the latest definition, not necessarily the version receiving traffic. Endpoint routing and `active_version` always describe the agent's stable endpoint."
 	if d.kind == "external" {
 		description = "~> **Preview:** requires `enable_preview` to include `\"external_agents\"`.\n\n" + description
 	}
@@ -199,11 +227,12 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			return
 		}
 		var definition promptAgentDefinition
-		version, ok := d.read(ctx, config.Name.ValueString(), &definition, &resp.Diagnostics)
+		version, agent, ok := d.read(ctx, config.Name.ValueString(), config.Version, &definition, &resp.Diagnostics)
 		if !ok {
 			return
 		}
 		config.apply(ctx, version, definition, &resp.Diagnostics)
+		config.applyRouting(ctx, agent, &resp.Diagnostics)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 	case "hosted":
 		var config hostedAgentDataSourceModel
@@ -212,11 +241,12 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			return
 		}
 		var definition hostedAgentDefinition
-		version, ok := d.read(ctx, config.Name.ValueString(), &definition, &resp.Diagnostics)
+		version, agent, ok := d.read(ctx, config.Name.ValueString(), config.Version, &definition, &resp.Diagnostics)
 		if !ok {
 			return
 		}
 		config.apply(ctx, version, definition, &resp.Diagnostics)
+		config.applyRouting(ctx, agent, &resp.Diagnostics)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 	case "external":
 		var config externalAgentDataSourceModel
@@ -225,30 +255,57 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			return
 		}
 		var definition externalAgentDefinition
-		version, ok := d.read(ctx, config.Name.ValueString(), &definition, &resp.Diagnostics)
+		version, agent, ok := d.read(ctx, config.Name.ValueString(), config.Version, &definition, &resp.Diagnostics)
 		if !ok {
 			return
 		}
 		config.apply(ctx, version, definition, &resp.Diagnostics)
+		config.applyRouting(ctx, agent, &resp.Diagnostics)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 	}
 }
 
-func (d *agentDataSource) read(ctx context.Context, name string, definition supportedAgentDefinition, diagnostics *diag.Diagnostics) (agentVersion, bool) {
+func (d *agentDataSource) read(ctx context.Context, name string, selectedVersion types.String, definition supportedAgentDefinition, diagnostics *diag.Diagnostics) (agentVersion, agentResponse, bool) {
+	if selectedVersion.IsUnknown() || (!selectedVersion.IsNull() && selectedVersion.ValueString() == "") {
+		diagnostics.AddError("Invalid agent version", "The version must be known and nonempty, or omitted to select the latest version.")
+		return agentVersion{}, agentResponse{}, false
+	}
 	if d.kind == "external" {
 		var err error
 		ctx, err = d.previewContext(ctx)
 		if err != nil {
 			diagnostics.AddError("Unable to read external agent", err.Error())
-			return agentVersion{}, false
+			return agentVersion{}, agentResponse{}, false
 		}
 	}
-	version, _, err := readAgent(ctx, d.client, name)
+	var agent agentResponse
+	err := d.client.JSON(ctx, http.MethodGet, "agents/"+url.PathEscape(name), nil, &agent)
 	if err != nil {
 		diagnostics.AddError("Unable to read "+d.kind+" agent", err.Error())
-		return agentVersion{}, false
+		return agentVersion{}, agentResponse{}, false
 	}
-	return version, decodeDefinition(version, definition, diagnostics)
+	version := agent.latestVersion()
+	if !selectedVersion.IsNull() {
+		version = agentVersion{}
+		err = d.client.JSON(ctx, http.MethodGet, "agents/"+url.PathEscape(name)+"/versions/"+url.PathEscape(selectedVersion.ValueString()), nil, &version)
+		if err != nil {
+			diagnostics.AddError("Unable to read "+d.kind+" agent version", err.Error())
+			return agentVersion{}, agentResponse{}, false
+		}
+		if version.Version != selectedVersion.ValueString() {
+			diagnostics.AddError("Unexpected agent version", "The service returned a different version from the one requested.")
+			return agentVersion{}, agentResponse{}, false
+		}
+		if version.Name == "" {
+			version.Name = name
+		}
+	}
+	return version, agent, decodeDefinition(version, definition, diagnostics)
+}
+
+func (m *agentDataSourceCommon) applyRouting(ctx context.Context, agent agentResponse, diagnostics *diag.Diagnostics) {
+	m.AgentEndpoint = agentEndpointValue(ctx, agent.AgentEndpoint, diagnostics)
+	m.ActiveVersion = activeAgentVersion(agent.Versions.Latest.Version, agent.AgentEndpoint)
 }
 
 func (d *agentDataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {

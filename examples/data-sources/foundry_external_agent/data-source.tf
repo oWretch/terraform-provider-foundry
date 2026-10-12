@@ -8,6 +8,11 @@ data "foundry_external_agent" "example" {
   name = "example-external-agent"
 }
 
+data "foundry_external_agent" "pinned" {
+  name    = "example-external-agent"
+  version = "1"
+}
+
 output "external_agent_otel_id" {
   value = data.foundry_external_agent.example.otel_agent_id
 }

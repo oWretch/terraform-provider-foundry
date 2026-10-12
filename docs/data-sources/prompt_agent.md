@@ -3,12 +3,12 @@
 page_title: "foundry_prompt_agent Data Source - foundry"
 subcategory: ""
 description: |-
-  Looks up the latest version of a prompt agent by name.
+  Looks up a prompt agent by name and optional version. Omitting version reads the latest definition, not necessarily the version receiving traffic. Endpoint routing and active_version always describe the agent's stable endpoint.
 ---
 
 # foundry_prompt_agent (Data Source)
 
-Looks up the latest version of a prompt agent by name.
+Looks up a prompt agent by name and optional version. Omitting `version` reads the latest definition, not necessarily the version receiving traffic. Endpoint routing and `active_version` always describe the agent's stable endpoint.
 
 ## Example Usage
 
@@ -17,8 +17,17 @@ data "foundry_prompt_agent" "example" {
   name = "example-prompt-agent"
 }
 
+data "foundry_prompt_agent" "pinned" {
+  name    = "example-prompt-agent"
+  version = "1"
+}
+
 output "prompt_agent_model" {
   value = data.foundry_prompt_agent.example.model
+}
+
+output "prompt_agent_active_version" {
+  value = data.foundry_prompt_agent.example.active_version
 }
 ```
 
@@ -29,16 +38,38 @@ output "prompt_agent_model" {
 
 - `name` (String) Name of the agent to look up.
 
+### Optional
+
+- `version` (String) Agent version to look up. Omit to read the latest version, regardless of endpoint routing.
+
 ### Read-Only
 
+- `active_version` (String) Version receiving all stable-endpoint traffic, independent of the selected definition version. Resolves `@latest` to the latest version number. Null when routing is absent, split across rules, or not a single 100% `FixedRatio` rule.
+- `agent_endpoint` (Attributes) The agent's stable-endpoint protocols and traffic routing, independent of the selected definition version. (see [below for nested schema](#nestedatt--agent_endpoint))
 - `agent_guid` (String) Service-assigned unique identifier for the agent.
 - `client_id` (String) Client ID of the agent instance identity.
-- `created_at` (Number) Unix timestamp when the latest agent version was created.
-- `description` (String) Description of the latest agent version.
-- `id` (String) Identifier of the latest agent version.
+- `created_at` (Number) Unix timestamp when the selected agent version was created.
+- `description` (String) Description of the selected agent version.
+- `id` (String) Identifier of the selected agent version.
 - `instructions` (String) System instructions for the agent.
-- `metadata` (Map of String) Metadata attached to the latest agent version.
+- `metadata` (Map of String) Metadata attached to the selected agent version.
 - `model` (String) Model deployment used by the agent.
 - `principal_id` (String) Principal ID of the agent instance identity.
-- `status` (String) Provisioning status of the latest agent version.
-- `version` (String) Latest agent version.
+- `status` (String) Provisioning status of the selected agent version.
+
+<a id="nestedatt--agent_endpoint"></a>
+### Nested Schema for `agent_endpoint`
+
+Read-Only:
+
+- `protocols` (List of String) Protocols the endpoint serves.
+- `version_selection_rules` (Attributes List) All routing rules returned by the service, including their traffic percentages. (see [below for nested schema](#nestedatt--agent_endpoint--version_selection_rules))
+
+<a id="nestedatt--agent_endpoint--version_selection_rules"></a>
+### Nested Schema for `agent_endpoint.version_selection_rules`
+
+Read-Only:
+
+- `agent_version` (String) Target version or `@latest`.
+- `traffic_percentage` (Number) Percentage of traffic routed to this version.
+- `type` (String) Routing rule type, such as `FixedRatio`.

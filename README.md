@@ -19,6 +19,7 @@ This repository contains a Terraform provider for the current Microsoft Foundry 
 These require opt-in through the provider's `enable_preview` argument. See [Preview features](#preview-features).
 
 - `foundry_external_agent` — an agent hosted outside Foundry, registered for observability (`external_agents`).
+- `foundry_agent_routing`: the traffic selector on an existing agent's stable endpoint (`agent_endpoints`).
 - `foundry_memory_store` — a memory store backing agent recall (`memory_stores`).
 - `foundry_skill` — a versioned skill and its default version pointer (`skills`).
 - `foundry_schedule` — a schedule that runs an evaluation or insight task (`schedules`).
@@ -32,7 +33,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 
 - `foundry_deployments` — model deployments available to the configured project.
 - `foundry_connections` — connections configured on the account and project, for referencing an existing connection by name.
-- `foundry_prompt_agent`, `foundry_hosted_agent` — read the latest version of an agent by name.
+- `foundry_prompt_agent`, `foundry_hosted_agent`: read an agent by name and optional version; omitting `version` reads the latest definition.
 - `foundry_dataset` — read a dataset by name and optional version; omitting the version resolves the service's current latest version.
 - `foundry_index` — read an Azure AI Search-backed index by name and optional version; omitting the version resolves the service's current latest version.
 - `foundry_routine` — read an existing routine.
@@ -42,7 +43,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 
 - `foundry_skill` — read a specific skill version (`skills`).
 - `foundry_memory_store` — read the current memory store object by name (`memory_stores`).
-- `foundry_external_agent` — read the latest external agent version by name (`external_agents`).
+- `foundry_external_agent`: read an external agent by name and optional version (`external_agents`).
 - `foundry_schedule` — read an existing schedule (`schedules`).
 - `foundry_model_version` — read an existing model version (`models`).
 - `foundry_evaluator_version`, `foundry_evaluation_taxonomy`, `foundry_evaluation`, `foundry_evaluation_rule` — read existing evaluation objects (`evaluations`).
@@ -137,7 +138,7 @@ Opt-in is per feature, so enabling one preview family does not enable the others
 
 | `enable_preview` value | Resources and data sources |
 | --- | --- |
-| `agent_endpoints` | The `agent_endpoint` attribute on agent resources |
+| `agent_endpoints` | `foundry_agent_routing`; read-only endpoint routing attributes on agent resources and data sources |
 | `draft_agents` | The `draft` attribute on agent resources |
 | `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
 | `external_agents` | `foundry_external_agent` |
@@ -154,6 +155,32 @@ Preview features are exempt from the provider's compatibility guarantees. Their 
 ## Scope
 
 The provider targets the current Foundry project API. It does not support the deprecated Assistants API, classic Foundry agents, or API-version-specific Terraform resource names.
+
+## Agent versions and routing
+
+Agent resources manage the latest definition. Changing the definition creates a new version; it does not change an existing pin on the stable endpoint. Agent data sources accept an optional `version` to read a specific definition. Without it, they read the latest definition even when traffic is pinned to an older version.
+
+Both expose `agent_endpoint.version_selection_rules`, including each rule's `traffic_percentage`. The computed `active_version` identifies the version receiving all traffic when the service returns one 100% `FixedRatio` rule. It resolves `@latest` against the agent's latest version, independently of a data source's selected definition. It is null for split, absent, or unrecognized routing. For multi-rule routing, inspect the rules instead of assuming there is one active version.
+
+Use `foundry_agent_routing` with `enable_preview = ["agent_endpoints"]` to manage the selector separately from the definition:
+
+```hcl
+resource "foundry_agent_routing" "production" {
+  agent_name = foundry_prompt_agent.example.name
+
+  version_selection_rules {
+    agent_version = "1"
+  }
+}
+```
+
+Change `agent_version` to another existing version to promote or roll back. Set it to `@latest` for automatic rollout, or reference `foundry_prompt_agent.example.version` to promote the version Terraform publishes. A routing update patches only the selector, without publishing a definition or replacing endpoint protocols or authorization. Destroying the routing resource relinquishes management but leaves the remote selector and agent unchanged. Only one routing resource should manage each agent.
+
+Configure exactly one `version_selection_rules` block with an `agent_version`. The provider sends it as a `FixedRatio` rule at 100%; neither the rule type nor the percentage is configurable. Its list-backed block can accommodate multiple targets and split controls when the service supports them for ordinary callers.
+
+The service currently requires ordinary selectors to contain exactly one `FixedRatio` rule at 100%. A live 80/20 PATCH returned 400: multi-arm splitting requires `experiment_id` and `salt`. Adding those fields returned 403 because only the Agents Optimization service can set them. The routing resource rejects remote split or non-100% configurations rather than silently treating them as a full-traffic pin, and refuses to overwrite service-owned experiment routing. Read-only endpoint metadata on agent resources and data sources preserves all returned rules and percentages.
+
+See Microsoft's [agent endpoint configuration](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-agent) for the service's routing model.
 
 ## Releases
 
