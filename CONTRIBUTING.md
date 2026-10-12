@@ -46,6 +46,7 @@ For the index fixture, create an Azure AI Search service and an index before run
 
 The federated identity needs the Foundry User role on the target account. No client secret is used.
 Configure its GitHub OIDC credential with audience `api://AzureADTokenExchange` and subject `repo:oWretch/terraform-provider-foundry:environment:foundry-ci`.
+The `foundry-ci` environment requires maintainer approval for every acceptance run, including scheduled runs and pushes to `main`.
 
 Tag pushes matching `v*` start the Release workflow. Tags must use `vMAJOR.MINOR.PATCH`, optionally followed by a SemVer prerelease suffix such as `-alpha.1`, `-beta.2`, or `-rc.1`. Numeric version components and numeric prerelease identifiers must not have leading zeroes. Build metadata (`+...`) is not allowed. Validation runs before the workflow requests access to the `release` environment; invalid tags cannot publish through this workflow. GoReleaser publishes valid tags as signed, non-draft GitHub releases and automatically marks prerelease versions as prereleases.
 
