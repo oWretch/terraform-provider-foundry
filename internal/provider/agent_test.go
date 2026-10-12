@@ -471,7 +471,7 @@ func TestAgentDataSourcesRejectKindMismatch(t *testing.T) {
 				test.dataSource.name = "external_agents"
 			}
 			var diagnostics diag.Diagnostics
-			if _, ok := test.dataSource.read(context.Background(), "agent", test.definition, &diagnostics); ok || !diagnostics.HasError() {
+			if _, _, ok := test.dataSource.read(context.Background(), "agent", types.StringNull(), test.definition, &diagnostics); ok || !diagnostics.HasError() {
 				t.Errorf("read accepted mismatched kind: %v", diagnostics)
 			}
 		})
@@ -548,15 +548,17 @@ func TestPromptAgentDataSourceRead(t *testing.T) {
 
 func nullAgentDataSourceCommon(name string) agentDataSourceCommon {
 	return agentDataSourceCommon{
-		Name:        types.StringValue(name),
-		ID:          types.StringNull(),
-		Version:     types.StringNull(),
-		Description: types.StringNull(),
-		Metadata:    types.MapNull(types.StringType),
-		Status:      types.StringNull(),
-		CreatedAt:   types.Int64Null(),
-		AgentGUID:   types.StringNull(),
-		PrincipalID: types.StringNull(),
-		ClientID:    types.StringNull(),
+		Name:          types.StringValue(name),
+		ID:            types.StringNull(),
+		Version:       types.StringNull(),
+		ActiveVersion: types.StringNull(),
+		AgentEndpoint: types.ObjectNull(agentEndpointAttrTypes),
+		Description:   types.StringNull(),
+		Metadata:      types.MapNull(types.StringType),
+		Status:        types.StringNull(),
+		CreatedAt:     types.Int64Null(),
+		AgentGUID:     types.StringNull(),
+		PrincipalID:   types.StringNull(),
+		ClientID:      types.StringNull(),
 	}
 }

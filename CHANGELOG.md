@@ -6,6 +6,8 @@ This file records user-visible changes to the provider.
 
 ### Added
 
+- `foundry_agent_routing` resource (preview) for pinning an existing agent's stable endpoint to a version or `@latest`, independently of definition updates. Requires `enable_preview = ["agent_endpoints"]` and exactly one `version_selection_rules` block; the block takes only `agent_version`, and the provider sends a `FixedRatio` rule at 100% internally. Destroy relinquishes management without changing remote routing.
+- Computed `active_version` on all agent resources and data sources, and `agent_endpoint` routing metadata on agent data sources. All returned rules and traffic percentages are preserved; `active_version` is null when there is no single 100% `FixedRatio` target.
 - Initial protocol 6 provider wiring.
 - API key, service principal, workload identity, managed identity, and Azure CLI authentication.
 - Azure CLI authentication by default when no other mode is configured.
@@ -55,6 +57,7 @@ This file records user-visible changes to the provider.
 
 ### Changed
 
+- Agent data sources accept an optional `version`. Omitting it continues to read the latest definition, independently of the endpoint's traffic selector.
 - Fork pull requests can run Azure acceptance tests after maintainer approval of the exact commit. Fork and same-repository PRs report the same `azure-acceptance` status, with status-write permissions isolated from the test job.
 - The minimum Go version is 1.26.9, matching the requirements of the linter and patched HTTP/2 dependency. Terraform and OpenTofu still require 1.11 or later.
 - Release tag validation requires `vMAJOR.MINOR.PATCH` with an optional SemVer prerelease suffix before requesting the signing environment. Leading zeroes in numeric identifiers and build metadata are rejected; manual snapshot builds are unchanged.

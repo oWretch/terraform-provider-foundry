@@ -39,6 +39,7 @@ When `true`, publishing a new definition creates a mutable draft version instead
 
 ### Read-Only
 
+- `active_version` (String) Version receiving all stable-endpoint traffic. Resolves `@latest` to the latest version number. Null when routing is absent, split across rules, or not a single 100% `FixedRatio` rule.
 - `agent_endpoint` (Attributes) ~> **Preview:** requires `enable_preview` to include `"agent_endpoints"`. Preview features may change in any provider release without following semantic versioning.
 
 The agent's built-in endpoint, including how traffic is routed across published versions. Read-only; the service manages the remaining endpoint sub-fields (protocol configuration, authorization schemes) outside this provider. (see [below for nested schema](#nestedatt--agent_endpoint))
@@ -46,7 +47,7 @@ The agent's built-in endpoint, including how traffic is routed across published 
 - `client_id` (String) Client ID of the agent instance identity.
 - `id` (String) Identifier of the current agent version, in `name:version` form.
 - `principal_id` (String) Principal ID of the agent instance identity.
-- `version` (String) Current agent version number.
+- `version` (String) Latest agent version number. This can differ from the version receiving endpoint traffic.
 
 <a id="nestedatt--agent_endpoint"></a>
 ### Nested Schema for `agent_endpoint`

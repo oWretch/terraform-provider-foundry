@@ -25,13 +25,14 @@ import (
 // agentCommon holds the attributes shared by every agent kind. Each kind embeds
 // this and contributes only its own definition fields.
 type agentCommon struct {
-	Name        types.String `tfsdk:"name"`
-	Description types.String `tfsdk:"description"`
-	ID          types.String `tfsdk:"id"`
-	Version     types.String `tfsdk:"version"`
-	AgentGUID   types.String `tfsdk:"agent_guid"`
-	PrincipalID types.String `tfsdk:"principal_id"`
-	ClientID    types.String `tfsdk:"client_id"`
+	Name          types.String `tfsdk:"name"`
+	Description   types.String `tfsdk:"description"`
+	ID            types.String `tfsdk:"id"`
+	Version       types.String `tfsdk:"version"`
+	ActiveVersion types.String `tfsdk:"active_version"`
+	AgentGUID     types.String `tfsdk:"agent_guid"`
+	PrincipalID   types.String `tfsdk:"principal_id"`
+	ClientID      types.String `tfsdk:"client_id"`
 	// Draft is a preview-gated ("draft_agents") field. When true, publishing a new
 	// definition creates a mutable draft version (id like "name:draft-<timestamp>")
 	// instead of an immutable numbered version. Verified live: the service accepts
@@ -90,7 +91,11 @@ func agentCommonSchema() map[string]schema.Attribute {
 		},
 		"version": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "Current agent version number.",
+			MarkdownDescription: "Latest agent version number. This can differ from the version receiving endpoint traffic.",
+		},
+		"active_version": schema.StringAttribute{
+			Computed:            true,
+			MarkdownDescription: "Version receiving all stable-endpoint traffic. Resolves `@latest` to the latest version number. Null when routing is absent, split across rules, or not a single 100% `FixedRatio` rule.",
 		},
 		"agent_guid": schema.StringAttribute{
 			Computed:            true,
@@ -186,6 +191,8 @@ type agentEndpoint struct {
 	Protocols       []string `json:"protocols"`
 	VersionSelector struct {
 		VersionSelectionRules []agentEndpointRule `json:"version_selection_rules"`
+		ExperimentID          string              `json:"experiment_id"`
+		Salt                  string              `json:"salt"`
 	} `json:"version_selector"`
 }
 
@@ -262,9 +269,27 @@ func (c *agentCommon) applyVersion(version agentVersion) {
 // agent_endpoint attribute. A nil endpoint (e.g. an offline unit test fixture)
 // results in a null object rather than an error.
 func (c *agentCommon) applyEndpoint(ctx context.Context, endpoint *agentEndpoint, diagnostics *diag.Diagnostics) {
+	c.ActiveVersion = activeAgentVersion(c.Version.ValueString(), endpoint)
+	c.AgentEndpoint = agentEndpointValue(ctx, endpoint, diagnostics)
+}
+
+func activeAgentVersion(latest string, endpoint *agentEndpoint) types.String {
+	if endpoint == nil || len(endpoint.VersionSelector.VersionSelectionRules) != 1 {
+		return types.StringNull()
+	}
+	rule := endpoint.VersionSelector.VersionSelectionRules[0]
+	if rule.Type != "FixedRatio" || rule.TrafficPercentage != 100 || rule.AgentVersion == "" {
+		return types.StringNull()
+	}
+	if rule.AgentVersion == "@latest" {
+		return optionalString(latest)
+	}
+	return types.StringValue(rule.AgentVersion)
+}
+
+func agentEndpointValue(ctx context.Context, endpoint *agentEndpoint, diagnostics *diag.Diagnostics) types.Object {
 	if endpoint == nil {
-		c.AgentEndpoint = types.ObjectNull(agentEndpointAttrTypes)
-		return
+		return types.ObjectNull(agentEndpointAttrTypes)
 	}
 
 	protocols, diags := types.ListValueFrom(ctx, types.StringType, endpoint.Protocols)
@@ -288,7 +313,7 @@ func (c *agentCommon) applyEndpoint(ctx context.Context, endpoint *agentEndpoint
 		"version_selection_rules": rulesList,
 	})
 	diagnostics.Append(diags...)
-	c.AgentEndpoint = value
+	return value
 }
 
 // optionalString keeps an unset optional attribute null rather than empty, so
