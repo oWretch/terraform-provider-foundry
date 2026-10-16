@@ -72,20 +72,20 @@ jobs:
           : "${FOUNDRY_PROJECT_NAME:?configure FOUNDRY_PROJECT_NAME in foundry-ci}"
           : "${FOUNDRY_TEST_CHAT_MODEL_NAME:?configure FOUNDRY_TEST_CHAT_MODEL_NAME in foundry-ci}"
           : "${FOUNDRY_TEST_EMBEDDING_MODEL_NAME:?configure FOUNDRY_TEST_EMBEDDING_MODEL_NAME in foundry-ci}"
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           repository: ${{ inputs.repository }}
           ref: ${{ inputs.commit_sha }}
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+      - uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: 1.11.0
           terraform_wrapper: false
-      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+      - uses: azure/login@v3.1.0
         with:
           client-id: ${{ vars.ARM_CLIENT_ID }}
           tenant-id: ${{ vars.ARM_TENANT_ID }}
