@@ -44,7 +44,7 @@ jobs:
           cache: true
       - name: Load signing key
         id: op
-        uses: 1password/load-secrets-action@v5.0.1
+        uses: 1password/load-secrets-action@5.0.1
         with:
           export-env: false
         env:
@@ -60,7 +60,7 @@ jobs:
           fingerprint=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
           test -n "$fingerprint"
           echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
-      - uses: goreleaser/goreleaser-action@v7.2.3
+      - uses: goreleaser/goreleaser-action@v7.3.0
         with:
           distribution: goreleaser
           version: v2.18.0
