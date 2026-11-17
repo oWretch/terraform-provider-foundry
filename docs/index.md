@@ -45,6 +45,7 @@ Opt-in is per feature, so enabling one preview family does not enable the others
 | `enable_preview` value | Resources and data sources |
 | --- | --- |
 | `agent_endpoints` | `foundry_agent_routing`; read-only endpoint routing attributes on agent resources and data sources |
+| `copilot_harness` | `harness_type` on `foundry_prompt_agent`; data source reads of Copilot agents |
 | `draft_agents` | The `draft` attribute on agent resources |
 | `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
 | `external_agents` | `foundry_external_agent` |
