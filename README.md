@@ -5,6 +5,7 @@ This repository contains a Terraform provider for the current Microsoft Foundry 
 ## Resources
 
 - `foundry_prompt_agent` — an agent backed by a model deployment and instructions.
+- `foundry_voice_agent`: a model-backed realtime voice agent with audio output. Changes publish a new version. Terraform does not start calls or bind phone numbers.
 - `foundry_hosted_agent` — an agent backed by a container image you supply.
 - `foundry_file` — an uploaded file used by other Foundry resources.
 - `foundry_vector_store` — a vector store that indexes attached files for retrieval.
@@ -33,7 +34,7 @@ These require opt-in through the provider's `enable_preview` argument. See [Prev
 
 - `foundry_deployments` — model deployments available to the configured project.
 - `foundry_connections` — connections configured on the account and project, for referencing an existing connection by name.
-- `foundry_prompt_agent`, `foundry_hosted_agent`: read an agent by name and optional version; omitting `version` reads the latest definition.
+- `foundry_prompt_agent`, `foundry_hosted_agent`, `foundry_voice_agent`: read an agent by name and optional version. Omit `version` to read the latest definition.
 - `foundry_dataset` — read a dataset by name and optional version; omitting the version resolves the service's current latest version.
 - `foundry_index` — read an Azure AI Search-backed index by name and optional version; omitting the version resolves the service's current latest version.
 - `foundry_routine` — read an existing routine.

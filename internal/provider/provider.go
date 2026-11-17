@@ -128,6 +128,7 @@ func (p *foundryProvider) Configure(ctx context.Context, req provider.ConfigureR
 func (p *foundryProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewPromptAgentResource,
+		NewVoiceAgentResource,
 		NewHostedAgentResource,
 		NewExternalAgentResource,
 		NewAgentRoutingResource,
@@ -154,6 +155,7 @@ func (p *foundryProvider) DataSources(context.Context) []func() datasource.DataS
 		NewDeploymentsDataSource,
 		NewConnectionsDataSource,
 		NewPromptAgentDataSource,
+		NewVoiceAgentDataSource,
 		NewHostedAgentDataSource,
 		NewExternalAgentDataSource,
 		NewFilesDataSource,

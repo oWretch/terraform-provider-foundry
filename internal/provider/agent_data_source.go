@@ -23,6 +23,10 @@ func NewPromptAgentDataSource() datasource.DataSource {
 	return &agentDataSource{kind: "prompt"}
 }
 
+func NewVoiceAgentDataSource() datasource.DataSource {
+	return &agentDataSource{kind: "voice"}
+}
+
 func NewHostedAgentDataSource() datasource.DataSource {
 	return &agentDataSource{kind: "hosted"}
 }
@@ -55,6 +59,12 @@ type promptAgentDataSourceModel struct {
 	agentDataSourceCommon
 	Model        types.String `tfsdk:"model"`
 	Instructions types.String `tfsdk:"instructions"`
+}
+
+type voiceAgentDataSourceModel struct {
+	agentDataSourceCommon
+	voiceAgentSettings
+	SubProtocol types.String `tfsdk:"sub_protocol"`
 }
 
 type hostedAgentDataSourceModel struct {
@@ -179,6 +189,14 @@ func (d *agentDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	case "prompt":
 		attributes["model"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Model deployment used by the agent."}
 		attributes["instructions"] = schema.StringAttribute{Computed: true, MarkdownDescription: "System instructions for the agent."}
+	case "voice":
+		attributes["model"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceModelDescription}
+		attributes["model_type"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceModelTypeDescription}
+		attributes["instructions"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceInstructionsDescription}
+		attributes["store"] = schema.BoolAttribute{Computed: true, MarkdownDescription: voiceStoreDescription}
+		attributes["voice"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceNameDescription}
+		attributes["voice_type"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceTypeDescription}
+		attributes["sub_protocol"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Voice protocol used by the definition, such as `realtime`."}
 	case "hosted":
 		attributes["image"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Container image used by the agent."}
 		attributes["registry_connection_id"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Foundry connection used for container registry authentication."}
@@ -207,6 +225,9 @@ func (d *agentDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	if d.kind == "external" {
 		description = "~> **Preview:** requires `enable_preview` to include `\"external_agents\"`.\n\n" + description
 	}
+	if d.kind == "voice" {
+		description += " The data source reads the fields listed below even if the definition contains settings that the resource cannot manage."
+	}
 	resp.Schema = schema.Schema{MarkdownDescription: description, Attributes: attributes}
 }
 
@@ -232,6 +253,22 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 			return
 		}
 		config.apply(ctx, version, definition, &resp.Diagnostics)
+		config.applyRouting(ctx, agent, &resp.Diagnostics)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+	case "voice":
+		var config voiceAgentDataSourceModel
+		resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		var definition voiceAgentDefinition
+		version, agent, ok := d.read(ctx, config.Name.ValueString(), config.Version, &definition, &resp.Diagnostics)
+		if !ok {
+			return
+		}
+		config.agentDataSourceCommon.apply(ctx, version, &resp.Diagnostics)
+		config.voiceAgentSettings.apply(definition)
+		config.SubProtocol = optionalString(definition.SubProtocol)
 		config.applyRouting(ctx, agent, &resp.Diagnostics)
 		resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 	case "hosted":
