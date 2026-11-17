@@ -59,6 +59,7 @@ type promptAgentDataSourceModel struct {
 	agentDataSourceCommon
 	Model        types.String `tfsdk:"model"`
 	Instructions types.String `tfsdk:"instructions"`
+	HarnessType  types.String `tfsdk:"harness_type"`
 }
 
 type voiceAgentDataSourceModel struct {
@@ -189,6 +190,11 @@ func (d *agentDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 	case "prompt":
 		attributes["model"] = schema.StringAttribute{Computed: true, MarkdownDescription: "Model deployment used by the agent."}
 		attributes["instructions"] = schema.StringAttribute{Computed: true, MarkdownDescription: "System instructions for the agent."}
+		attributes["harness_type"] = schema.StringAttribute{
+			Computed: true,
+			MarkdownDescription: "Managed harness type. Null for the default runtime. " +
+				"Reading a `microsoft_copilot_preview` agent requires `enable_preview = [\"copilot_harness\"]` on the provider.",
+		}
 	case "voice":
 		attributes["model"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceModelDescription}
 		attributes["model_type"] = schema.StringAttribute{Computed: true, MarkdownDescription: voiceModelTypeDescription}
@@ -250,6 +256,10 @@ func (d *agentDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		var definition promptAgentDefinition
 		version, agent, ok := d.read(ctx, config.Name.ValueString(), config.Version, &definition, &resp.Diagnostics)
 		if !ok {
+			return
+		}
+		config.HarnessType = readPromptHarness(d.client, &definition, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 		config.apply(ctx, version, definition, &resp.Diagnostics)

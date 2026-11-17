@@ -140,6 +140,7 @@ Opt-in is per feature, so enabling one preview family does not enable the others
 | `enable_preview` value | Resources and data sources |
 | --- | --- |
 | `agent_endpoints` | `foundry_agent_routing`; read-only endpoint routing attributes on agent resources and data sources |
+| `copilot_harness` | `harness_type` on `foundry_prompt_agent`; data source reads of Copilot agents |
 | `draft_agents` | The `draft` attribute on agent resources |
 | `evaluations` | `foundry_evaluation`, `foundry_evaluation_rule`, `foundry_evaluation_taxonomy`, `foundry_evaluator_version` |
 | `external_agents` | `foundry_external_agent` |
@@ -156,6 +157,14 @@ Preview features are exempt from the provider's compatibility guarantees. Their 
 ## Scope
 
 The provider targets the current Foundry project API. It does not support the deprecated Assistants API, classic Foundry agents, or API-version-specific Terraform resource names.
+
+## Copilot harness preview
+
+Add `copilot_harness` to the provider's `enable_preview` set, then set `harness_type = "microsoft_copilot_preview"` on a new `foundry_prompt_agent`. Use a model deployment that supports reasoning and tool calling. Omit `harness_type` for the default runtime. Foundry fixes the harness at creation, so use a new agent name to switch runtimes.
+
+To import a Copilot agent, opt in, set `harness_type` in the resource configuration, and import by agent name. The matching data source reports the harness type for the selected version. It checks the opt-in after reading the agent, when the harness type is known.
+
+Terraform manages the basic prompt definition, not tool settings, skill attachments, or agent invocation. The resource rejects definitions it cannot safely write back. For invocation and preview requirements, see [Microsoft's Copilot harness guide](https://learn.microsoft.com/azure/foundry/agents/how-to/use-tools-skills-copilot-harness?pivots=sdk).
 
 ## Agent versions and routing
 

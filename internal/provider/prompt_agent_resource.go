@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
@@ -20,7 +23,14 @@ var (
 	_ resource.ResourceWithConfigure      = &promptAgentResource{}
 	_ resource.ResourceWithImportState    = &promptAgentResource{}
 	_ resource.ResourceWithValidateConfig = &promptAgentResource{}
+	_ resource.ResourceWithModifyPlan     = &promptAgentResource{}
 )
+
+const copilotHarnessType = "microsoft_copilot_preview"
+
+func copilotHarnessGate(client *clients.Client) previewGate {
+	return previewGate{client: client, name: "copilot_harness", feature: "MicrosoftCopilot"}
+}
 
 func NewPromptAgentResource() resource.Resource {
 	return &promptAgentResource{}
@@ -34,6 +44,7 @@ type promptAgentModel struct {
 	agentCommon
 	Model        types.String `tfsdk:"model"`
 	Instructions types.String `tfsdk:"instructions"`
+	HarnessType  types.String `tfsdk:"harness_type"`
 }
 
 type promptAgentDefinition struct {
@@ -50,13 +61,84 @@ type promptAgentDefinition struct {
 	StructuredInputs map[string]json.RawMessage `json:"structured_inputs,omitempty"`
 	Harness          json.RawMessage            `json:"harness,omitempty"`
 	Skills           []json.RawMessage          `json:"skills,omitempty"`
+	unknownFields    []string
 }
 
 func (m promptAgentModel) definition() promptAgentDefinition {
-	return promptAgentDefinition{
+	definition := promptAgentDefinition{
 		Kind:         "prompt",
 		Model:        m.Model.ValueString(),
 		Instructions: m.Instructions.ValueString(),
+	}
+	if m.HarnessType.ValueString() == copilotHarnessType {
+		definition.Harness = json.RawMessage(`{"type":"` + copilotHarnessType + `"}`)
+	}
+	return definition
+}
+
+func (d *promptAgentDefinition) UnmarshalJSON(data []byte) error {
+	type definition promptAgentDefinition
+	*d = promptAgentDefinition{}
+	if err := json.Unmarshal(data, (*definition)(d)); err != nil {
+		return err
+	}
+	if !hasJSONValue(d.Harness) {
+		return nil
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	// Do not publish a preview definition if the service returned a field
+	// this provider cannot round-trip. Leave default agents on their existing checks.
+	for name, value := range fields {
+		switch name {
+		case "kind", "model", "instructions", "rai_config", "temperature", "top_p",
+			"reasoning", "tools", "tool_choice", "text", "structured_inputs", "harness", "skills":
+		default:
+			if hasJSONValue(value) {
+				d.unknownFields = append(d.unknownFields, name)
+			}
+		}
+	}
+	sort.Strings(d.unknownFields)
+	return nil
+}
+
+func (d *promptAgentDefinition) harnessType() (types.String, error) {
+	if !hasJSONValue(d.Harness) {
+		return types.StringNull(), nil
+	}
+	var fields map[string]json.RawMessage
+	var kind string
+	if err := json.Unmarshal(d.Harness, &fields); err != nil ||
+		len(fields) != 1 || json.Unmarshal(fields["type"], &kind) != nil || kind != copilotHarnessType {
+		return types.StringNull(), fmt.Errorf("harness must contain only the supported type %q", copilotHarnessType)
+	}
+	return types.StringValue(kind), nil
+}
+
+func readPromptHarness(client *clients.Client, definition *promptAgentDefinition, diagnostics *diag.Diagnostics) types.String {
+	kind, err := definition.harnessType()
+	if err != nil {
+		diagnostics.AddError("Unsupported prompt agent harness", err.Error())
+	} else if !kind.IsNull() {
+		// Agent GET operations do not take the SDK's Foundry-Features option.
+		// Enforce the Terraform opt-in after discovering the harness.
+		copilotHarnessGate(client).validate(diagnostics)
+	}
+	return kind
+}
+
+func promptPublishContext(ctx context.Context, client *clients.Client, kind types.String) (context.Context, error) {
+	switch {
+	case kind.IsNull():
+		return ctx, nil
+	case !kind.IsUnknown() && kind.ValueString() == copilotHarnessType:
+		return copilotHarnessGate(client).previewContext(ctx)
+	default:
+		return ctx, fmt.Errorf("harness_type must be omitted or set to %q", copilotHarnessType)
 	}
 }
 
@@ -65,7 +147,7 @@ func (*promptAgentDefinition) expectedKind() string {
 }
 
 func (d *promptAgentDefinition) validateSupported() error {
-	var fields []string
+	fields := append([]string(nil), d.unknownFields...)
 	if hasJSONValue(d.RAIConfig) {
 		fields = append(fields, "rai_config")
 	}
@@ -90,7 +172,7 @@ func (d *promptAgentDefinition) validateSupported() error {
 	if len(d.StructuredInputs) > 0 {
 		fields = append(fields, "structured_inputs")
 	}
-	if hasJSONValue(d.Harness) {
+	if _, err := d.harnessType(); err != nil {
 		fields = append(fields, "harness")
 	}
 	if len(d.Skills) > 0 {
@@ -126,6 +208,14 @@ func (r *promptAgentResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Optional:            true,
 		MarkdownDescription: "System instructions for the agent.",
 	}
+	attributes["harness_type"] = schema.StringAttribute{
+		Optional:   true,
+		Validators: []validator.String{stringvalidator.OneOf(copilotHarnessType)},
+		MarkdownDescription: "Managed harness type. Omit this attribute to use the default runtime. " +
+			"`microsoft_copilot_preview` requires `enable_preview = [\"copilot_harness\"]` on the provider. " +
+			"Foundry fixes the harness when the agent is created. Use a new agent name to change it. " +
+			"When importing a Copilot agent, set this attribute in your configuration. Terraform does not invoke the agent or manage its tools or skill attachments.",
+	}
 
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Manages a prompt agent, which runs a model deployment against a set of instructions. Changing the definition publishes a new agent version.",
@@ -144,6 +234,36 @@ func (r *promptAgentResource) ValidateConfig(ctx context.Context, req resource.V
 		return
 	}
 	validateDraftPreview(r.client, config.Draft, &resp.Diagnostics)
+	if config.HarnessType.ValueString() == copilotHarnessType {
+		copilotHarnessGate(r.client).validate(&resp.Diagnostics)
+	}
+}
+
+func (r *promptAgentResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var state, plan promptAgentModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if !resp.Diagnostics.HasError() && !plan.Name.IsUnknown() && state.Name.Equal(plan.Name) &&
+		!plan.HarnessType.IsUnknown() && !state.HarnessType.Equal(plan.HarnessType) {
+		rejectPromptHarnessChange(&resp.Diagnostics)
+	}
+}
+
+func rejectPromptHarnessChange(diagnostics *diag.Diagnostics) {
+	diagnostics.AddAttributeError(path.Root("harness_type"), "Cannot change the prompt agent harness",
+		"Foundry fixes the harness when the agent is created. Use a new agent name to change it.")
+}
+
+func checkPublishedPromptHarness(definition *promptAgentDefinition, expected types.String, diagnostics *diag.Diagnostics) bool {
+	actual, err := definition.harnessType()
+	if err != nil || !actual.Equal(expected) {
+		diagnostics.AddError("Unexpected prompt agent harness", "Foundry returned a different harness than requested.")
+		return false
+	}
+	return true
 }
 
 func (r *promptAgentResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -153,14 +273,20 @@ func (r *promptAgentResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	version, endpoint, err := createAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
+	publishCtx, err := promptPublishContext(ctx, r.client, plan.HarnessType)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to create prompt agent", err.Error())
+		return
+	}
+	version, endpoint, err := createAgent(publishCtx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create prompt agent", err.Error())
 		return
 	}
 
 	var definition promptAgentDefinition
-	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
+	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) ||
+		!checkPublishedPromptHarness(&definition, plan.HarnessType, &resp.Diagnostics) {
 		return
 	}
 	plan.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
@@ -188,6 +314,10 @@ func (r *promptAgentResource) Read(ctx context.Context, req resource.ReadRequest
 	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
 		return
 	}
+	state.HarnessType = readPromptHarness(r.client, &definition, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	state.apply(ctx, version, endpoint, definition, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -199,19 +329,30 @@ func (r *promptAgentResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
+	publishCtx, err := promptPublishContext(ctx, r.client, plan.HarnessType)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to update prompt agent", err.Error())
+		return
+	}
 	var current promptAgentDefinition
 	if !validateAgentBeforeUpdate(ctx, r.client, plan.Name.ValueString(), &current, &resp.Diagnostics) {
 		return
 	}
+	currentHarness, _ := current.harnessType() // Already validated by validateAgentBeforeUpdate.
+	if !currentHarness.Equal(plan.HarnessType) {
+		rejectPromptHarnessChange(&resp.Diagnostics)
+		return
+	}
 
-	version, err := updateAgent(ctx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
+	version, err := updateAgent(publishCtx, r.client, plan.Name.ValueString(), plan.Description.ValueString(), plan.definition(), plan.Draft.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update prompt agent", err.Error())
 		return
 	}
 
 	var definition promptAgentDefinition
-	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) {
+	if !decodeManagedDefinition(version, &definition, &resp.Diagnostics) ||
+		!checkPublishedPromptHarness(&definition, plan.HarnessType, &resp.Diagnostics) {
 		return
 	}
 	// updateAgent does not return endpoint metadata, so re-read it to keep the

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -16,6 +17,7 @@ import (
 	frameworkvalidator "github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
@@ -65,6 +67,9 @@ func TestPromptAgentDefinitionRoundTrip(t *testing.T) {
 	if definition.Kind != "prompt" {
 		t.Errorf("kind = %q, want prompt", definition.Kind)
 	}
+	if hasJSONValue(definition.Harness) {
+		t.Error("default prompt definition must omit the harness")
+	}
 	if applied.Model.ValueString() != "gpt-4.1" {
 		t.Errorf("model = %q", applied.Model.ValueString())
 	}
@@ -74,6 +79,155 @@ func TestPromptAgentDefinitionRoundTrip(t *testing.T) {
 	// An absent description must stay null so Terraform does not report a permanent diff.
 	if !applied.Description.IsNull() {
 		t.Error("empty description should be null")
+	}
+}
+
+func TestPromptCopilotLifecycle(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	var posts atomic.Int32
+	const definition = `{"kind":"prompt","model":"reasoning-model","harness":{"type":"microsoft_copilot_preview"},"text":{},"top_p":1}`
+	versionJSON := func(version int) string {
+		return fmt.Sprintf(`{"id":"agent:%d","name":"agent","version":"%d","definition":%s}`, version, version, definition)
+	}
+	agentJSON := func(version int) string {
+		return fmt.Sprintf(`{"name":"agent","versions":{"latest":%s}}`, versionJSON(version))
+	}
+	client := newAgentTestClient(t, []string{"copilot_harness", "agent_endpoints"}, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		header := req.Header.Get("Foundry-Features")
+		switch req.Method {
+		case http.MethodPost:
+			if header != "MicrosoftCopilot=V1Preview" || req.URL.Query().Get("api-version") != "v1" {
+				t.Errorf("publish header = %q, URL = %s", header, req.URL)
+			}
+			var body struct {
+				Definition struct {
+					Harness map[string]string `json:"harness"`
+					Kind    string            `json:"kind"`
+				} `json:"definition"`
+			}
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil ||
+				body.Definition.Kind != "prompt" || len(body.Definition.Harness) != 1 ||
+				body.Definition.Harness["type"] != copilotHarnessType {
+				t.Errorf("unexpected publish body %+v: %v", body, err)
+			}
+			switch count := posts.Add(1); {
+			case count == 1 && strings.HasSuffix(req.URL.Path, "/agents"):
+				_, _ = fmt.Fprint(w, agentJSON(1))
+			case count == 2 && strings.HasSuffix(req.URL.Path, "/agents/agent/versions"):
+				_, _ = fmt.Fprint(w, versionJSON(2))
+			default:
+				t.Errorf("unexpected publish route %s", req.URL)
+			}
+		case http.MethodGet:
+			if header != "" {
+				t.Errorf("GET sent preview header %q", header)
+			}
+			if strings.HasSuffix(req.URL.Path, "/agents/agent/versions/1") {
+				_, _ = fmt.Fprint(w, versionJSON(1))
+			} else {
+				_, _ = fmt.Fprint(w, agentJSON(int(posts.Load())))
+			}
+		default:
+			t.Errorf("unexpected request %s %s", req.Method, req.URL)
+		}
+	}))
+	r := &promptAgentResource{client: client}
+	var rs resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &rs)
+	model := promptAgentModel{
+		agentCommon: agentCommon{Name: types.StringValue("agent"), AgentEndpoint: types.ObjectNull(agentEndpointAttrTypes)},
+		Model:       types.StringValue("reasoning-model"),
+		HarnessType: types.StringValue(copilotHarnessType),
+	}
+	plan := func(model promptAgentModel) tfsdk.Plan {
+		value := tfsdk.Plan{Schema: rs.Schema}
+		if d := value.Set(ctx, model); d.HasError() {
+			t.Fatalf("plan: %v", d)
+		}
+		return value
+	}
+	created := resource.CreateResponse{State: tfsdk.State{Schema: rs.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: plan(model)}, &created)
+	if created.Diagnostics.HasError() || posts.Load() != 1 {
+		t.Fatalf("create: %v, POSTs: %d", created.Diagnostics, posts.Load())
+	}
+
+	imported := resource.ImportStateResponse{State: tfsdk.State{Schema: rs.Schema,
+		Raw: tftypes.NewValue(rs.Schema.Type().TerraformType(ctx), nil)}}
+	r.ImportState(ctx, resource.ImportStateRequest{ID: "agent"}, &imported)
+	read := resource.ReadResponse{State: imported.State}
+	r.Read(ctx, resource.ReadRequest{State: imported.State}, &read)
+	var state promptAgentModel
+	read.Diagnostics.Append(read.State.Get(ctx, &state)...)
+	if imported.Diagnostics.HasError() || read.Diagnostics.HasError() || !state.HarnessType.Equal(model.HarnessType) {
+		t.Fatalf("import/read: %v, %v, harness: %v", imported.Diagnostics, read.Diagnostics, state.HarnessType)
+	}
+
+	update := resource.UpdateResponse{State: read.State}
+	r.Update(ctx, resource.UpdateRequest{Plan: plan(model)}, &update)
+	if update.Diagnostics.HasError() || posts.Load() != 2 {
+		t.Fatalf("update: %v, POSTs: %d", update.Diagnostics, posts.Load())
+	}
+	withoutPreview := &promptAgentResource{client: newAgentTestClient(t, []string{"draft_agents"}, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		t.Errorf("preview-disabled create sent %s", req.Method)
+		w.WriteHeader(http.StatusBadRequest)
+	}))}
+	gated := resource.CreateResponse{State: tfsdk.State{Schema: rs.Schema}}
+	withoutPreview.Create(ctx, resource.CreateRequest{Plan: plan(model)}, &gated)
+	if !gated.Diagnostics.HasError() {
+		t.Fatal("create did not enforce the Copilot opt-in")
+	}
+
+	model.HarnessType = types.StringNull()
+	var modified resource.ModifyPlanResponse
+	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: read.State, Plan: plan(model)}, &modified)
+	if !modified.Diagnostics.HasError() {
+		t.Fatal("plan accepted a same-name harness change")
+	}
+	blocked := resource.UpdateResponse{State: read.State}
+	r.Update(ctx, resource.UpdateRequest{Plan: plan(model)}, &blocked)
+	if !blocked.Diagnostics.HasError() || posts.Load() != 2 {
+		t.Fatalf("same-name harness change: %v, POSTs: %d", blocked.Diagnostics, posts.Load())
+	}
+	model.Name = types.StringValue("new-agent")
+	modified = resource.ModifyPlanResponse{}
+	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: read.State, Plan: plan(model)}, &modified)
+	if modified.Diagnostics.HasError() {
+		t.Fatalf("new name: %v", modified.Diagnostics)
+	}
+
+	d := &agentDataSource{kind: "prompt"}
+	var ds datasource.SchemaResponse
+	d.Schema(ctx, datasource.SchemaRequest{}, &ds)
+	config := promptAgentDataSourceModel{agentDataSourceCommon: nullAgentDataSourceCommon("agent")}
+	for _, selected := range []types.String{types.StringNull(), types.StringValue("1")} {
+		config.Version = selected
+		values := tfsdk.State{Schema: ds.Schema}
+		if diags := values.Set(ctx, config); diags.HasError() {
+			t.Fatalf("data source config: %v", diags)
+		}
+		request := datasource.ReadRequest{Config: tfsdk.Config{Raw: values.Raw, Schema: ds.Schema}}
+		d.client = client
+		response := datasource.ReadResponse{State: tfsdk.State{Schema: ds.Schema}}
+		d.Read(ctx, request, &response)
+		response.Diagnostics.Append(response.State.Get(ctx, &config)...)
+		if response.Diagnostics.HasError() || config.HarnessType.ValueString() != copilotHarnessType ||
+			(!selected.IsNull() && config.Version.ValueString() != selected.ValueString()) {
+			t.Fatalf("data source: %v, state: %+v", response.Diagnostics, config)
+		}
+		d.client = newAgentTestClient(t, nil, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if strings.HasSuffix(req.URL.Path, "/versions/1") {
+				_, _ = fmt.Fprint(w, versionJSON(1))
+			} else {
+				_, _ = fmt.Fprint(w, agentJSON(2))
+			}
+		}))
+		response = datasource.ReadResponse{State: tfsdk.State{Schema: ds.Schema}}
+		d.Read(ctx, request, &response)
+		if !response.Diagnostics.HasError() {
+			t.Fatal("data source read did not enforce the Copilot opt-in")
+		}
 	}
 }
 
@@ -320,6 +474,24 @@ func TestManagedAgentDefinitionRejectsUnsupportedFieldsAndKindMismatch(t *testin
 		{
 			name:       "prompt harness",
 			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"gpt-4.1","harness":{"type":"github_copilot"}}`)},
+			definition: &promptAgentDefinition{},
+			wantError:  true,
+		},
+		{
+			name:       "copilot harness with extra settings",
+			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"model","harness":{"type":"microsoft_copilot_preview","future_option":false}}`)},
+			definition: &promptAgentDefinition{},
+			wantError:  true,
+		},
+		{
+			name:       "copilot definition with unknown settings",
+			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"model","harness":{"type":"microsoft_copilot_preview"},"future_option":false}`)},
+			definition: &promptAgentDefinition{},
+			wantError:  true,
+		},
+		{
+			name:       "copilot tools are not managed",
+			version:    agentVersion{Definition: json.RawMessage(`{"kind":"prompt","model":"model","harness":{"type":"microsoft_copilot_preview"},"tools":[{"type":"microsoft_copilot_toolset_preview"}]}`)},
 			definition: &promptAgentDefinition{},
 			wantError:  true,
 		},
