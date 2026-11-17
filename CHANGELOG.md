@@ -7,6 +7,7 @@ This file records user-visible changes to the provider.
 ### Added
 
 - `harness_type` on `foundry_prompt_agent` and its data source. Set it to `microsoft_copilot_preview` on a new agent and add `copilot_harness` to the provider's `enable_preview` set. Switching runtimes requires a new agent name.
+- `foundry_voice_agent` resource and data source on API `v1`. The resource publishes immutable model-backed realtime voice definitions and imports by name. The data source reads the latest or a specific version.
 - `foundry_agent_routing` resource (preview) for pinning an existing agent's stable endpoint to a version or `@latest`, independently of definition updates. Requires `enable_preview = ["agent_endpoints"]` and exactly one `version_selection_rules` block; the block takes only `agent_version`, and the provider sends a `FixedRatio` rule at 100% internally. Destroy relinquishes management without changing remote routing.
 - Computed `active_version` on all agent resources and data sources, and `agent_endpoint` routing metadata on agent data sources. All returned rules and traffic percentages are preserved; `active_version` is null when there is no single 100% `FixedRatio` target.
 - Initial protocol 6 provider wiring.
@@ -41,6 +42,7 @@ This file records user-visible changes to the provider.
 - `foundry_toolbox` data source for looking up a specific toolbox version's tool and skill configuration by name and version.
 - `foundry_evaluator_version` resource (preview) for managing an immutable evaluator version (prompt, code, rubric, or endpoint definition) used by evaluations. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluator_version` data source (preview) for looking up a specific evaluator version by name and version. Requires `enable_preview = ["evaluations"]` on the provider.
+- The `foundry_evaluator_version` resource and data source support safety rubrics in preview. Set `categories = ["safety"]` and `scoring_mode = "boolean"` on the resource, and set `allowed` on each rule. Leave out weights. The `evaluations` preview opt-in still applies.
 - `foundry_evaluation_taxonomy` resource (preview) for managing an agent risk taxonomy; categories and subcategories are auto-derived by the service from the selected risk categories and modeled as a computed, order-preserving list. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation_taxonomy` data source (preview) for looking up an existing evaluation taxonomy by name. Requires `enable_preview = ["evaluations"]` on the provider.
 - `foundry_evaluation` resource (preview) for managing an evaluation definition (data source item schema and testing criteria) on the OpenAI-compatible `/openai/v1/evals` route; evaluation runs, output items, and cancellation are intentionally left outside Terraform. Requires `enable_preview = ["evaluations"]` on the provider.

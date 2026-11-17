@@ -47,6 +47,15 @@ func (d *evaluatorVersionDataSource) Schema(_ context.Context, _ datasource.Sche
 				Computed:            true,
 				MarkdownDescription: "Evaluator kind: `prompt`, `code`, `rubric`, or `endpoint`.",
 			},
+			"categories": schema.ListAttribute{
+				Computed:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Evaluator categories, such as `safety` or `quality`.",
+			},
+			"scoring_mode": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Configured rubric scoring mode, if present.",
+			},
 			"prompt_text": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "LLM judge prompt template, when `type` is `prompt`.",
@@ -64,9 +73,11 @@ func (d *evaluatorVersionDataSource) Schema(_ context.Context, _ datasource.Sche
 				MarkdownDescription: "Scoring dimensions, when `type` is `rubric`.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
-						"id":          schema.StringAttribute{Computed: true, MarkdownDescription: "Stable identifier of the dimension."},
-						"description": schema.StringAttribute{Computed: true, MarkdownDescription: "Description of the dimension shown to the LLM judge."},
-						"weight":      schema.Float64Attribute{Computed: true, MarkdownDescription: "Relative weight of the dimension in the overall rubric score."},
+						"id":                schema.StringAttribute{Computed: true, MarkdownDescription: "Stable identifier of the dimension."},
+						"description":       schema.StringAttribute{Computed: true, MarkdownDescription: "Description of the dimension shown to the LLM judge."},
+						"weight":            schema.Float64Attribute{Computed: true, MarkdownDescription: "Relative weight of the dimension, if set."},
+						"allowed":           schema.BoolAttribute{Computed: true, MarkdownDescription: "For a safety dimension, `true` means the agent should follow the rule and `false` means it must avoid the behavior."},
+						"always_applicable": schema.BoolAttribute{Computed: true, MarkdownDescription: "Whether the judge always checks this dimension."},
 					},
 				},
 			},
