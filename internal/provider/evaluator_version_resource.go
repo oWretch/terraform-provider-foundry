@@ -39,6 +39,7 @@ type evaluatorVersionModel struct {
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
 	Type        types.String `tfsdk:"type"`
+	Categories  types.List   `tfsdk:"categories"`
 
 	// prompt
 	PromptText types.String `tfsdk:"prompt_text"`
@@ -46,7 +47,8 @@ type evaluatorVersionModel struct {
 	CodeText types.String `tfsdk:"code_text"`
 	BlobURI  types.String `tfsdk:"blob_uri"`
 	// rubric
-	Dimensions []evaluatorDimensionModel `tfsdk:"dimensions"`
+	ScoringMode types.String              `tfsdk:"scoring_mode"`
+	Dimensions  []evaluatorDimensionModel `tfsdk:"dimensions"`
 	// endpoint
 	ConnectionName types.String `tfsdk:"connection_name"`
 
@@ -60,9 +62,11 @@ type evaluatorVersionModel struct {
 }
 
 type evaluatorDimensionModel struct {
-	ID          types.String  `tfsdk:"id"`
-	Description types.String  `tfsdk:"description"`
-	Weight      types.Float64 `tfsdk:"weight"`
+	ID               types.String  `tfsdk:"id"`
+	Description      types.String  `tfsdk:"description"`
+	Weight           types.Float64 `tfsdk:"weight"`
+	Allowed          types.Bool    `tfsdk:"allowed"`
+	AlwaysApplicable types.Bool    `tfsdk:"always_applicable"`
 }
 
 type evaluatorDefinitionRequest struct {
@@ -71,14 +75,21 @@ type evaluatorDefinitionRequest struct {
 	CodeText       string                       `json:"code_text,omitempty"`
 	BlobURI        string                       `json:"blob_uri,omitempty"`
 	Dimensions     []evaluatorDimensionWire     `json:"dimensions,omitempty"`
+	Scoring        *evaluatorRubricScoring      `json:"scoring,omitempty"`
 	ConnectionName string                       `json:"connection_name,omitempty"`
-	Metrics        map[string]evaluatorMetricIn `json:"metrics"`
+	Metrics        map[string]evaluatorMetricIn `json:"metrics,omitempty"`
 }
 
 type evaluatorDimensionWire struct {
-	ID          string  `json:"id"`
-	Description string  `json:"description,omitempty"`
-	Weight      float64 `json:"weight,omitempty"`
+	ID               string   `json:"id"`
+	Description      string   `json:"description,omitempty"`
+	Weight           *float64 `json:"weight,omitempty"`
+	Allowed          *bool    `json:"allowed,omitempty"`
+	AlwaysApplicable *bool    `json:"always_applicable,omitempty"`
+}
+
+type evaluatorRubricScoring struct {
+	Mode string `json:"mode"`
 }
 
 // evaluatorMetricIn is always sent as an empty object; the service derives
@@ -86,8 +97,10 @@ type evaluatorDimensionWire struct {
 type evaluatorMetricIn struct{}
 
 type evaluatorVersionRequest struct {
-	Description string                     `json:"description,omitempty"`
-	Definition  evaluatorDefinitionRequest `json:"definition"`
+	Description   string                     `json:"description,omitempty"`
+	EvaluatorType string                     `json:"evaluator_type,omitempty"`
+	Categories    []string                   `json:"categories,omitempty"`
+	Definition    evaluatorDefinitionRequest `json:"definition"`
 }
 
 type evaluatorDefinitionResponse struct {
@@ -96,6 +109,7 @@ type evaluatorDefinitionResponse struct {
 	CodeText       string                     `json:"code_text"`
 	BlobURI        string                     `json:"blob_uri"`
 	Dimensions     []evaluatorDimensionWire   `json:"dimensions"`
+	Scoring        *evaluatorRubricScoring    `json:"scoring"`
 	ConnectionName string                     `json:"connection_name"`
 	Metrics        map[string]evaluatorMetric `json:"metrics"`
 }
@@ -108,6 +122,7 @@ type evaluatorVersionResponse struct {
 	Description string                      `json:"description"`
 	CreatedAt   string                      `json:"created_at"`
 	ModifiedAt  string                      `json:"modified_at"`
+	Categories  []string                    `json:"categories"`
 	Definition  evaluatorDefinitionResponse `json:"definition"`
 }
 
@@ -115,6 +130,10 @@ func (m evaluatorVersionModel) request(ctx context.Context, diagnostics *diag.Di
 	definition := evaluatorDefinitionRequest{
 		Type:    m.Type.ValueString(),
 		Metrics: map[string]evaluatorMetricIn{},
+	}
+	var categories []string
+	if !m.Categories.IsNull() && !m.Categories.IsUnknown() {
+		diagnostics.Append(m.Categories.ElementsAs(ctx, &categories, false)...)
 	}
 
 	switch definition.Type {
@@ -124,19 +143,28 @@ func (m evaluatorVersionModel) request(ctx context.Context, diagnostics *diag.Di
 		definition.CodeText = m.CodeText.ValueString()
 		definition.BlobURI = m.BlobURI.ValueString()
 	case "rubric":
+		if mode := m.ScoringMode.ValueString(); mode != "" {
+			definition.Scoring = &evaluatorRubricScoring{Mode: mode}
+		}
 		definition.Dimensions = make([]evaluatorDimensionWire, 0, len(m.Dimensions))
 		for _, dimension := range m.Dimensions {
+			var alwaysApplicable *bool
+			if !dimension.AlwaysApplicable.IsUnknown() {
+				alwaysApplicable = dimension.AlwaysApplicable.ValueBoolPointer()
+			}
 			definition.Dimensions = append(definition.Dimensions, evaluatorDimensionWire{
-				ID:          dimension.ID.ValueString(),
-				Description: dimension.Description.ValueString(),
-				Weight:      dimension.Weight.ValueFloat64(),
+				ID:               dimension.ID.ValueString(),
+				Description:      dimension.Description.ValueString(),
+				Weight:           dimension.Weight.ValueFloat64Pointer(),
+				Allowed:          dimension.Allowed.ValueBoolPointer(),
+				AlwaysApplicable: alwaysApplicable,
 			})
 		}
 	case "endpoint":
 		definition.ConnectionName = m.ConnectionName.ValueString()
 	}
 
-	if !m.Metrics.IsNull() {
+	if !m.Metrics.IsNull() && !m.Metrics.IsUnknown() {
 		var names map[string]string
 		diagnostics.Append(m.Metrics.ElementsAs(ctx, &names, false)...)
 		for name := range names {
@@ -144,10 +172,15 @@ func (m evaluatorVersionModel) request(ctx context.Context, diagnostics *diag.Di
 		}
 	}
 
-	return evaluatorVersionRequest{
+	request := evaluatorVersionRequest{
 		Description: m.Description.ValueString(),
+		Categories:  categories,
 		Definition:  definition,
 	}
+	if len(categories) > 0 {
+		request.EvaluatorType = "custom"
+	}
+	return request
 }
 
 func (m *evaluatorVersionModel) apply(ctx context.Context, response evaluatorVersionResponse, diagnostics *diag.Diagnostics) {
@@ -163,6 +196,13 @@ func (m *evaluatorVersionModel) apply(ctx context.Context, response evaluatorVer
 	m.CodeText = optionalString(response.Definition.CodeText)
 	m.BlobURI = optionalString(response.Definition.BlobURI)
 	m.ConnectionName = optionalString(response.Definition.ConnectionName)
+	categories, diags := types.ListValueFrom(ctx, types.StringType, response.Categories)
+	diagnostics.Append(diags...)
+	m.Categories = categories
+	m.ScoringMode = types.StringNull()
+	if response.Definition.Scoring != nil {
+		m.ScoringMode = optionalString(response.Definition.Scoring.Mode)
+	}
 
 	if len(response.Definition.Dimensions) == 0 {
 		m.Dimensions = nil
@@ -170,9 +210,11 @@ func (m *evaluatorVersionModel) apply(ctx context.Context, response evaluatorVer
 		m.Dimensions = make([]evaluatorDimensionModel, 0, len(response.Definition.Dimensions))
 		for _, dimension := range response.Definition.Dimensions {
 			m.Dimensions = append(m.Dimensions, evaluatorDimensionModel{
-				ID:          types.StringValue(dimension.ID),
-				Description: optionalString(dimension.Description),
-				Weight:      types.Float64Value(dimension.Weight),
+				ID:               types.StringValue(dimension.ID),
+				Description:      optionalString(dimension.Description),
+				Weight:           types.Float64PointerValue(dimension.Weight),
+				Allowed:          types.BoolPointerValue(dimension.Allowed),
+				AlwaysApplicable: types.BoolPointerValue(dimension.AlwaysApplicable),
 			})
 		}
 	}
@@ -205,7 +247,8 @@ func (r *evaluatorVersionResource) Metadata(_ context.Context, req resource.Meta
 func (r *evaluatorVersionResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	requiresReplace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
-		MarkdownDescription: evaluationsPreviewNote + "Manages a single immutable version of a Foundry evaluator: a code, prompt, rubric, or endpoint based scoring definition used by evaluations and evaluation rules. Publishing a new version never mutates an existing one; `terraform apply` on a changed configuration creates a new version under the same evaluator name.",
+		MarkdownDescription: evaluationsPreviewNote + "Manages a single immutable version of a Foundry evaluator: a code, prompt, rubric, or endpoint based scoring definition used by evaluations and evaluation rules. Publishing a new version never mutates an existing one; `terraform apply` on a changed configuration creates a new version under the same evaluator name.\n\n" +
+			"For a [safety rubric](https://learn.microsoft.com/azure/foundry/concepts/evaluation-evaluators/safety-rubric-evaluators), set `type = \"rubric\"`, `categories = [\"safety\"]`, and `scoring_mode = \"boolean\"`. Provide a description and an explicit `allowed` value for each of up to 20 dimensions. Leave out weights. Microsoft hosts the judge, so evaluation runs do not need a judge deployment for this rubric.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -221,6 +264,18 @@ func (r *evaluatorVersionResource) Schema(_ context.Context, _ resource.SchemaRe
 				MarkdownDescription: "Evaluator kind. One of `prompt`, `code`, `rubric`, or `endpoint`. Changing this forces a new evaluator version to be created.",
 				PlanModifiers:       requiresReplace,
 				Validators:          []validator.String{stringvalidator.OneOf("prompt", "code", "rubric", "endpoint")},
+			},
+			"categories": schema.ListAttribute{
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Evaluator categories. Set to `[\"safety\"]` for a safety rubric.",
+			},
+			"scoring_mode": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Rubric scoring mode: `boolean` or `likert`. Set to `boolean` for a safety rubric. Omit to keep legacy rubric scoring.",
+				Validators:          []validator.String{stringvalidator.OneOf("boolean", "likert")},
 			},
 			"prompt_text": schema.StringAttribute{
 				Optional:            true,
@@ -252,7 +307,16 @@ func (r *evaluatorVersionResource) Schema(_ context.Context, _ resource.SchemaRe
 						},
 						"weight": schema.Float64Attribute{
 							Optional:            true,
-							MarkdownDescription: "Relative weight of the dimension in the overall rubric score.",
+							MarkdownDescription: "Relative weight of the dimension in the overall rubric score. Omit for Boolean scoring.",
+						},
+						"allowed": schema.BoolAttribute{
+							Optional:            true,
+							MarkdownDescription: "Set on every safety dimension: `true` for behavior the agent should follow and `false` for behavior it must avoid. Omit for quality rubrics.",
+						},
+						"always_applicable": schema.BoolAttribute{
+							Optional:            true,
+							Computed:            true,
+							MarkdownDescription: "Whether the judge always checks this dimension. The service defaults to `false`.",
 						},
 					},
 				},
@@ -264,19 +328,18 @@ func (r *evaluatorVersionResource) Schema(_ context.Context, _ resource.SchemaRe
 			},
 			"metrics": schema.MapAttribute{
 				Optional:            true,
+				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Metric names produced by this evaluator, mapped to themselves. The service derives each metric's scoring type and bounds; set the same name as both key and value, for example `{ score = \"score\" }`.",
+				MarkdownDescription: "Metric names produced by this evaluator, mapped to themselves, for example `{ score = \"score\" }`. Omit for a safety rubric; the service reports allowed and disallowed behavior violations separately.",
 				PlanModifiers:       []planmodifier.Map{},
 			},
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Service-assigned identifier of this evaluator version, in `azureai://.../evaluators/{name}/versions/{version}` form.",
-				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"version": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Service-assigned version number of this evaluator version.",
-				PlanModifiers:       []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"display_name": schema.StringAttribute{
 				Computed:            true,

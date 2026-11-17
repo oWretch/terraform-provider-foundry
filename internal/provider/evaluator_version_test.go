@@ -3,15 +3,152 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/oWretch/terraform-provider-foundry/internal/clients"
 )
+
+func TestEvaluatorVersionSafetyRubricRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	const versionPath = "/api/projects/default/evaluators/reservation-safety/versions"
+	const requestJSON = `{
+		"evaluator_type":"custom",
+		"categories":["safety"],
+		"definition":{
+			"type":"rubric","scoring":{"mode":"boolean"},
+			"dimensions":[
+				{"id":"privacy","description":"Discloses another guest's details.","allowed":false,"always_applicable":true},
+				{"id":"booking","description":"Helps with a valid booking.","allowed":true,"always_applicable":false},
+				{"id":"cancellation","description":"Explains the cancellation policy.","allowed":true}
+			]
+		}
+	}`
+	const responseJSON = `{
+		"id":"azureai://accounts/test/projects/default/evaluators/reservation-safety/versions/1",
+		"name":"reservation-safety","version":"1","categories":["safety"],
+		"definition":{
+			"type":"rubric","scoring":{"mode":"boolean"},
+			"dimensions":[
+				{"id":"privacy","description":"Discloses another guest's details.","allowed":false,"always_applicable":true},
+				{"id":"booking","description":"Helps with a valid booking.","allowed":true,"always_applicable":false},
+				{"id":"cancellation","description":"Explains the cancellation policy.","allowed":true,"always_applicable":false}
+			],
+			"metrics":{"allowed_behavior_violated":{},"disallowed_behavior_violated":{}}
+		}
+	}`
+	var want map[string]any
+	if err := json.Unmarshal([]byte(requestJSON), &want); err != nil {
+		t.Fatal(err)
+	}
+	client := newAgentTestClient(t, []string{evaluationsPreviewFeatureName}, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if got := req.Header.Get("Foundry-Features"); got != "Evaluations=V1Preview" {
+			t.Errorf("preview header = %q", got)
+		}
+		switch {
+		case req.Method == http.MethodPost && req.URL.Path == versionPath:
+			var got map[string]any
+			if err := json.NewDecoder(req.Body).Decode(&got); err != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("create body = %#v, err = %v; want %#v", got, err, want)
+			}
+			w.WriteHeader(http.StatusCreated)
+		case req.Method == http.MethodGet && req.URL.Path == versionPath+"/1":
+		default:
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(responseJSON))
+	}))
+
+	ctx := context.Background()
+	categories, diagnostics := types.ListValueFrom(ctx, types.StringType, []string{"safety"})
+	if diagnostics.HasError() {
+		t.Fatalf("build categories: %v", diagnostics)
+	}
+	plan := evaluatorVersionModel{
+		Name:        types.StringValue("reservation-safety"),
+		Type:        types.StringValue("rubric"),
+		Categories:  categories,
+		ScoringMode: types.StringValue("boolean"),
+		Metrics:     types.MapUnknown(types.StringType),
+		Dimensions: []evaluatorDimensionModel{
+			{ID: types.StringValue("privacy"), Description: types.StringValue("Discloses another guest's details."), Allowed: types.BoolValue(false), AlwaysApplicable: types.BoolValue(true)},
+			{ID: types.StringValue("booking"), Description: types.StringValue("Helps with a valid booking."), Allowed: types.BoolValue(true), AlwaysApplicable: types.BoolValue(false)},
+			{ID: types.StringValue("cancellation"), Description: types.StringValue("Explains the cancellation policy."), Allowed: types.BoolValue(true), AlwaysApplicable: types.BoolUnknown()},
+		},
+	}
+
+	gate := previewGate{client: client, feature: evaluationsPreviewFeature, name: evaluationsPreviewFeatureName}
+	r := &evaluatorVersionResource{previewGate: gate}
+	var schemaResponse resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResponse)
+	planState := tfsdk.State{Schema: schemaResponse.Schema}
+	if diags := planState.Set(ctx, &plan); diags.HasError() {
+		t.Fatalf("build plan: %v", diags)
+	}
+	create := resource.CreateResponse{State: tfsdk.State{Schema: schemaResponse.Schema}}
+	r.Create(ctx, resource.CreateRequest{Plan: tfsdk.Plan{Raw: planState.Raw, Schema: schemaResponse.Schema}}, &create)
+	if create.Diagnostics.HasError() {
+		t.Fatalf("create: %v", create.Diagnostics)
+	}
+	var created evaluatorVersionModel
+	if diags := create.State.Get(ctx, &created); diags.HasError() {
+		t.Fatalf("read created state: %v", diags)
+	}
+	plan.Dimensions[2].AlwaysApplicable = types.BoolValue(false)
+	if !created.Categories.Equal(categories) || !created.ScoringMode.Equal(plan.ScoringMode) || !reflect.DeepEqual(created.Dimensions, plan.Dimensions) {
+		t.Fatalf("unexpected rubric state: %+v", created)
+	}
+	metrics := created.Metrics.Elements()
+	if len(metrics) != 2 || metrics["allowed_behavior_violated"] == nil || metrics["disallowed_behavior_violated"] == nil {
+		t.Fatalf("unexpected service metrics: %v", metrics)
+	}
+
+	ds := &evaluatorVersionDataSource{previewGate: gate}
+	config := evaluatorVersionModel{
+		Name:       plan.Name,
+		Version:    types.StringValue("1"),
+		Categories: types.ListNull(types.StringType),
+		Metrics:    types.MapNull(types.StringType),
+	}
+	read, diags := readAssetDataSource(t, ds, config)
+	if diags.HasError() || !reflect.DeepEqual(read, created) {
+		t.Fatalf("data source state = %+v, diagnostics = %v; want %+v", read, diags, created)
+	}
+}
+
+func TestEvaluatorVersionLegacyRubricOmitsSafetyFields(t *testing.T) {
+	t.Parallel()
+
+	model := evaluatorVersionModel{
+		Type: types.StringValue("rubric"),
+		Dimensions: []evaluatorDimensionModel{
+			{ID: types.StringValue("accuracy"), Description: types.StringValue("Gives an accurate answer."), Weight: types.Float64Value(2)},
+		},
+	}
+	var diagnostics diag.Diagnostics
+	request := model.request(context.Background(), &diagnostics)
+	if diagnostics.HasError() {
+		t.Fatalf("build request: %v", diagnostics)
+	}
+	got, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"definition":{"type":"rubric","dimensions":[{"id":"accuracy","description":"Gives an accurate answer.","weight":2}]}}`
+	if string(got) != want {
+		t.Errorf("legacy rubric request = %s; want %s", got, want)
+	}
+}
 
 func TestEvaluatorVersionRequestPromptType(t *testing.T) {
 	t.Parallel()
